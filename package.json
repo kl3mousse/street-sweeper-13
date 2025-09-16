@@ -5,6 +5,6 @@
   "description": "A tiny webxdc game scaffold with a canvas and basic state transitions.",
   "scripts": {
     "dev": "webxdc-dev",
-    "pack": "zip -9r street-sweeper-13.xdc index.html styles.css main.js manifest.toml icon.png assets"
+    "pack": "zip -9r street-sweeper-13.xdc index.html styles.css main.js manifest.toml icon.png credits.html assets"
   }
 }

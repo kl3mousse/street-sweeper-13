@@ -6,9 +6,10 @@ const GameState = {
   RUN: 1,
   OVER: 2,
 };
-
+ 
 let state = GameState.START;
 
+// Canvas and context
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
@@ -31,11 +32,11 @@ function setState(next) {
   overScreen.classList.toggle('hidden', state !== GameState.OVER);
 }
 
-startBtn.addEventListener('click', () => setState(GameState.RUN));
-restartBtn.addEventListener('click', () => setState(GameState.RUN));
-backBtn.addEventListener('click', () => setState(GameState.START));
+if (startBtn) startBtn.addEventListener('click', () => setState(GameState.RUN));
+if (restartBtn) restartBtn.addEventListener('click', () => setState(GameState.RUN));
+if (backBtn) backBtn.addEventListener('click', () => setState(GameState.START));
 
-// Simple fixed clear color for visibility
+// HUD colors and debug flags
 const CLEAR_COLOR = '#101820'; // deep navy
 const HUD_COLOR = '#eaeaea';
 const DEBUG = false; // set to true to show debug overlays
@@ -118,7 +119,7 @@ let levelBanner = null;
 function triggerLevelBanner() {
   const level = Math.floor(wordsCompleted / 10) + 1;
   const cityName = CITIES[cityIndex]?.name || '';
-  const text = `Level ${level}: ${cityName} — Score: ${score}`;
+  const text = `Level ${level}: ${cityName}`;
   // Start to the right of the canvas and scroll left; draw near bottom with a small margin
   const margin = 6;
   levelBanner = { text, x: canvas.width + 10, y: canvas.height - margin, active: true };
@@ -649,36 +650,37 @@ function loop(ts) {
     ctx.fillText(`dt: ${dt.toFixed(3)}s`, 6, 20);
   }
 
-  // HUD layout
+  // HUD layout: Single-row top bar + word slots
   if (state === GameState.RUN) {
     const margin = 6;
-    // Top-left: Lives + Score
+    const BAR_H = 18;
+    // Top translucent bar background for contrast on light city backgrounds
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(0, 0, canvas.width, BAR_H);
+
+    // Lives (left) and Score (right)
     const brooms = '🧹'.repeat(lives);
     ctx.fillStyle = HUD_COLOR;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.font = 'bold 12px monospace';
-    ctx.fillText(`Vies: ${brooms}`, margin, margin);
+    ctx.textBaseline = 'middle';
     ctx.font = '12px monospace';
-    ctx.fillText(`Score: ${score}`, margin, margin + 14);
+    const yMid = Math.floor(BAR_H / 2);
+    // Lives left
+    ctx.textAlign = 'left';
+    ctx.fillText(brooms, margin, yMid);
+    // Score right
+    ctx.textAlign = 'right';
+    ctx.fillText(String(score), canvas.width - margin, yMid);
 
-    // Top-center: title and slots
-    const title = 'TROUVE LE MOT:';
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 12px monospace';
-    ctx.fillText(title, canvas.width / 2, margin);
-    // Word slots below
+    // Word slots below the bar (no title text to save space)
     const SLOT_W = 12, SLOT_H = 14, SLOT_GAP = 2;
     const n = targetWord.length;
     const totalW = n * SLOT_W + (n - 1) * SLOT_GAP;
     let sx = Math.floor((canvas.width - totalW) / 2);
-    const sy = margin + 16;
+    const sy = BAR_H + 4;
     for (let i = 0; i < n; i++) {
       const collected = i < currentIndex;
-      // box
       ctx.fillStyle = collected ? '#ffffff' : '#2a3542';
       ctx.fillRect(sx, sy, SLOT_W, SLOT_H);
-      // letter
       ctx.fillStyle = collected ? '#000000' : '#93a1b0';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -686,15 +688,6 @@ function loop(ts) {
       ctx.fillText(targetWord[i] || '', sx + SLOT_W / 2, sy + SLOT_H / 2 + 0.5);
       sx += SLOT_W + SLOT_GAP;
     }
-
-    // Top-right: Timer numeric
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'top';
-    ctx.font = '12px monospace';
-    ctx.fillStyle = HUD_COLOR;
-    ctx.fillText(`${Math.ceil(timeLeft)}s`, canvas.width - margin, margin);
-
-    // Bottom: City + Level removed from static HUD; shown as a scrolling banner instead
   }
 
   // Timer bar at the very top of the canvas

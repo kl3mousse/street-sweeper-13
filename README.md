@@ -14,7 +14,7 @@ If you enjoyed it, consider supporting independent booksellers by picking up the
 
 *These are not affiliate links. Please avoid Amazon and other monopolies — choose independents whenever you can.*
 
-Game art is inspired by Jibé Pollien pixel art from the book above.
+Game art is inspired by [Jibé Pollien](https://www.chezjibe.com/) pixel art from the book above.
 Road art is taken from Dylan Macgillavry on [Art Station](https://www.artstation.com/artwork/0nxqyG)
 
 ## How to Play

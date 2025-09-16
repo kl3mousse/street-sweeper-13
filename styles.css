@@ -85,6 +85,84 @@ p { margin: 0 0 16px; color: var(--muted); }
 }
 #start-screen .btn.primary svg { display: block; }
 
+/* Retro pixel-art button menu */
+.pixel-menu {
+  position: absolute;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+}
+
+.pixel-btn {
+  position: relative;
+  appearance: none;
+  border: none;
+  background: #1e2936;
+  color: #eaeaea;
+  font-family: 'Press Start 2P', monospace, system-ui;
+  font-size: 18px; /* 1.5x */
+  letter-spacing: 1px;
+  padding: 15px 21px; /* 1.5x */
+  text-transform: uppercase;
+  cursor: pointer;
+  image-rendering: pixelated;
+  white-space: nowrap;
+  /* pixel border */
+  box-shadow:
+    0 0 0 2px #000 inset,
+    0 0 0 1px #2c3642,
+    0 6px 0 0 #0d1218,
+    0 6px 0 2px #000;
+}
+.pixel-btn.primary { background: #0f6a52; }
+.pixel-btn.primary:hover { background: #128061; }
+.pixel-btn:hover { filter: brightness(1.08); }
+.pixel-btn:active {
+  transform: translateY(3px);
+  box-shadow:
+    0 0 0 2px #000 inset,
+    0 0 0 1px #2c3642,
+    0 3px 0 0 #0d1218,
+    0 3px 0 2px #000;
+}
+
+/* Remove transform scaling; using real size increases above */
+
+/* Portrait: place menu below the image */
+@media (orientation: portrait) {
+  #start-screen {
+    display: grid;
+    grid-template-rows: auto auto;
+    place-items: center;
+    min-height: 100vh;
+  }
+  #start-art {
+    position: static; /* let it flow */
+    transform: none;
+    width: min(100vw, 720px);
+    height: auto;
+    max-height: 72vh;
+  }
+  .pixel-menu {
+    position: static;
+    transform: none;
+    margin-top: 16px;
+    gap: 20px;
+  }
+}
+
+/* Landscape: keep bottom-centered floating menu, but nudge above bottom for comfort */
+@media (orientation: landscape) {
+  .pixel-menu {
+    bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* Subtle background gradient behind the contained image */
 #start-screen::before {
   content: "";

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Street Sweeper 13 — Credits</title>
+  <link rel="icon" href="icon.png" sizes="any" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --fg: #eaeaea;
+      --muted: #a0a6ad;
+      --accent: #00d18f;
+      --panel: rgba(0,0,0,0.25);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--fg);
+      display: grid; place-items: center; font-family: 'Press Start 2P', monospace, system-ui;
+    }
+    .wrap { width: min(720px, 92vw); padding: 16px; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid #22303c;
+      box-shadow: 0 0 0 2px #000 inset, 0 6px 0 0 #0d1218, 0 6px 0 2px #000;
+      padding: 16px;
+    }
+    h1, h2, h3 { margin: 12px 0; line-height: 1.3; }
+    h1 { font-size: 18px; }
+    h2 { font-size: 14px; color: var(--accent); }
+    p { margin: 12px 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    ul { margin: 8px 0 16px 18px; font-size: 12px; }
+    a { color: #9ae6b4; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+  .pixel-btn { position: relative; appearance: none; border: none; background: #1e2936; color: #eaeaea; font-size: 14px; padding: 12px 16px; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 0 0 2px #000 inset, 0 0 0 1px #2c3642, 0 4px 0 0 #0d1218, 0 4px 0 2px #000; }
+    .pixel-btn:hover { filter: brightness(1.08); }
+    .pixel-btn:active { transform: translateY(2px); box-shadow: 0 0 0 2px #000 inset, 0 0 0 1px #2c3642, 0 2px 0 0 #0d1218, 0 2px 0 2px #000; }
+  .pixel-btn.primary { background: #0f6a52; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .title { font-size: 14px; }
+  .lang-switch { display: flex; gap: 8px; align-items: center; }
+    .muted { color: var(--muted); font-size: 11px; }
+    .spacer { height: 8px; }
+    .grid { display: grid; gap: 12px; }
+
+  /* Language visibility */
+  .i18n { display: none; }
+  body[data-lang="en"] .i18n.en { display: block; }
+  body[data-lang="fr"] .i18n.fr { display: block; }
+
+    @media (max-width: 480px) {
+      h1 { font-size: 16px; }
+      .title { font-size: 12px; }
+      .pixel-btn { font-size: 12px; padding: 10px 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="title">
+        <span class="i18n en">Street Sweeper 13 — Credits</span>
+        <span class="i18n fr">Street Sweeper 13 — Crédits</span>
+      </div>
+      <div class="lang-switch">
+        <button class="pixel-btn" data-set-lang="en" type="button">EN</button>
+        <button class="pixel-btn" data-set-lang="fr" type="button">FR</button>
+        <a id="back-btn" class="pixel-btn" href="index.html">Back</a>
+      </div>
+    </div>
+
+    <div class="panel grid i18n en">
+      <section>
+        <h2>Inspiration</h2>
+        <p>This game is a small <em>clin d'œil</em> to <strong>ULIS</strong> by Fabien Toulmé (Delcourt, 2025). If you enjoyed it, consider supporting independent booksellers:</p>
+        <ul>
+          <li><a href="https://www.editions-delcourt.fr/bd/series/serie-ulis/album-ulis" target="_blank" rel="noreferrer noopener">Éditions Delcourt (publisher)</a></li>
+          <li><a href="https://www.leslibraires.fr/livre/24520936-ulis-fabien-toulme-delcourt" target="_blank" rel="noreferrer noopener">LesLibraires.fr</a></li>
+          <li><a href="https://www.librest.com/livres/ulis-fabien-toulme_0-12492854_9782413088165.html" target="_blank" rel="noreferrer noopener">Librest</a></li>
+          <li><a href="https://www.placedeslibraires.fr/livre/9782413088165-ulis-fabien-toulme/" target="_blank" rel="noreferrer noopener">Place des Libraires</a></li>
+        </ul>
+        <p class="muted">These are not affiliate links. Please avoid monopolies — choose independents whenever you can.</p>
+      </section>
+
+      <section>
+        <h2>Art & Assets</h2>
+        <ul>
+          <li>Pixel art inspiration: <a href="https://www.chezjibe.com/" target="_blank" rel="noreferrer noopener">Jibé Pollien</a></li>
+          <li>Road art: Dylan Macgillavry on <a href="https://www.artstation.com/artwork/0nxqyG" target="_blank" rel="noreferrer noopener">ArtStation</a></li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>WebXDC Community</h2>
+        <p>Built for the WebXDC ecosystem — big thanks to the community for tools, docs, and support:</p>
+        <ul>
+          <li><a href="https://webxdc.org/" target="_blank" rel="noreferrer noopener">webxdc.org</a> — project homepage</li>
+          <li><a href="https://github.com/webxdc" target="_blank" rel="noreferrer noopener">webxdc GitHub org</a></li>
+          <li><a href="https://github.com/webxdc/webxdc-dev" target="_blank" rel="noreferrer noopener">webxdc-dev</a> — dev server</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Made By</h2>
+        <ul>
+          <li>Game code: <span class="muted">kl3mousse</span></li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>License</h2>
+        <p>See <a href="LICENSE">LICENSE</a> in the repository for details.</p>
+      </section>
+    </div>
+
+    <div class="panel grid i18n fr">
+      <section>
+        <h2>Inspiration</h2>
+        <p>Ce jeu est un petit <em>clin d'œil</em> à <strong>ULIS</strong> de Fabien Toulmé (Delcourt, 2025). Si vous l'avez apprécié, pensez à soutenir les librairies indépendantes :</p>
+        <ul>
+          <li><a href="https://www.editions-delcourt.fr/bd/series/serie-ulis/album-ulis" target="_blank" rel="noreferrer noopener">Éditions Delcourt (éditeur)</a></li>
+          <li><a href="https://www.leslibraires.fr/livre/24520936-ulis-fabien-toulme-delcourt" target="_blank" rel="noreferrer noopener">LesLibraires.fr</a></li>
+          <li><a href="https://www.librest.com/livres/ulis-fabien-toulme_0-12492854_9782413088165.html" target="_blank" rel="noreferrer noopener">Librest</a></li>
+          <li><a href="https://www.placedeslibraires.fr/livre/9782413088165-ulis-fabien-toulme/" target="_blank" rel="noreferrer noopener">Place des Libraires</a></li>
+        </ul>
+        <p class="muted">Ce ne sont pas des liens affiliés. Évitez les monopoles — choisissez des indépendants autant que possible.</p>
+      </section>
+
+      <section>
+        <h2>Art & Ressources</h2>
+        <ul>
+          <li>Inspiration pixel art : <a href="https://www.chezjibe.com/" target="_blank" rel="noreferrer noopener">Jibé Pollien</a></li>
+          <li>Art de la route : Dylan Macgillavry sur <a href="https://www.artstation.com/artwork/0nxqyG" target="_blank" rel="noreferrer noopener">ArtStation</a></li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Communauté WebXDC</h2>
+        <p>Conçu pour l'écosystème WebXDC — merci à la communauté pour ses outils, sa documentation et son support :</p>
+        <ul>
+          <li><a href="https://webxdc.org/" target="_blank" rel="noreferrer noopener">webxdc.org</a> — site du projet</li>
+          <li><a href="https://github.com/webxdc" target="_blank" rel="noreferrer noopener">organisation GitHub webxdc</a></li>
+          <li><a href="https://github.com/webxdc/webxdc-dev" target="_blank" rel="noreferrer noopener">webxdc-dev</a> — serveur de dev</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Réalisé par</h2>
+        <ul>
+          <li>Code du jeu : <span class="muted">kl3mousse</span></li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Licence</h2>
+        <p>Voir <a href="LICENSE">LICENSE</a> dans le dépôt pour les détails.</p>
+      </section>
+    </div>
+
+  </div>
+  <script>
+    (function(){
+      const KEY = 'ss13_lang';
+      const prefersFR = (navigator.language || navigator.userLanguage || 'en').toLowerCase().startsWith('fr');
+      const saved = localStorage.getItem(KEY);
+      const initial = saved === 'en' || saved === 'fr' ? saved : (prefersFR ? 'fr' : 'en');
+      function apply(lang){
+        document.documentElement.setAttribute('lang', lang);
+        document.body.setAttribute('data-lang', lang);
+        localStorage.setItem(KEY, lang);
+        // Toggle active class on buttons
+        document.querySelectorAll('[data-set-lang]')?.forEach(btn => {
+          btn.classList.toggle('primary', btn.getAttribute('data-set-lang') === lang);
+        });
+        // Update Back button label
+        const back = document.getElementById('back-btn');
+        if (back) back.textContent = (lang === 'fr') ? 'Retour' : 'Back';
+      }
+      document.addEventListener('click', (e) => {
+        const t = e.target.closest('[data-set-lang]');
+        if (t) {
+          e.preventDefault();
+          apply(t.getAttribute('data-set-lang'));
+        }
+      });
+      apply(initial);
+    })();
+  </script>
+</body>
+</html>
