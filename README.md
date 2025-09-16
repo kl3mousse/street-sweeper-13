@@ -48,6 +48,14 @@ npm install -g webxdc-dev
 webxdc-dev
 ```
 
+Or use any static server:
+
+```sh
+python3 -m http.server 8000
+```
+
+Then open `http://<your-computer-ip>:8000/` on your Android device (both on the same Wi‑Fi).
+
 ## Package for webxdc
 ```sh
 # Create .xdc file
@@ -58,3 +66,8 @@ Share the `.xdc` file in any WebXDC-compatible chat app.
 
 ## Debug Mode
 Set `DEBUG = true` at the top of `main.js` to see entity counts and collision boxes.
+
+## Troubleshooting (Android/Chrome)
+- If the start/credits buttons appear unstyled at the top or don't respond, avoid opening the files directly with `file://` on mobile. Serve the folder over HTTP (see above) to ensure CSS/JS load correctly.
+- If taps don’t seem to register, hard‑refresh the page and clear site data: Settings → Site settings → Storage → Clear for this site.
+- Some environments can block `localStorage`. We've added guards, but if best score doesn’t persist, it may be disabled on your device/browser profile.

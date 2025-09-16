@@ -57,6 +57,8 @@ p { margin: 0 0 16px; color: var(--muted); }
   image-rendering: crisp-edges;
   z-index: 0;
   background: transparent; /* no background on the image element */
+  /* Never block taps on the menu/buttons above it */
+  pointer-events: none;
 }
 
 /* Start button emphasis */
@@ -101,6 +103,7 @@ p { margin: 0 0 16px; color: var(--muted); }
 .pixel-btn {
   position: relative;
   appearance: none;
+  -webkit-appearance: none;
   border: none;
   background: #1e2936;
   color: #eaeaea;
@@ -112,6 +115,9 @@ p { margin: 0 0 16px; color: var(--muted); }
   cursor: pointer;
   image-rendering: pixelated;
   white-space: nowrap;
+  display: inline-block; /* ensure anchors get proper box */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   /* pixel border */
   box-shadow:
     0 0 0 2px #000 inset,
@@ -183,6 +189,7 @@ p { margin: 0 0 16px; color: var(--muted); }
 
 .btn {
   appearance: none;
+  -webkit-appearance: none;
   border: 1px solid #2c3642;
   background: var(--btn);
   color: var(--fg);
@@ -190,6 +197,8 @@ p { margin: 0 0 16px; color: var(--muted); }
   border-radius: 8px;
   cursor: pointer;
   font-size: 14px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 .btn:hover { background: var(--btn-hover); }
 .btn.primary { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }

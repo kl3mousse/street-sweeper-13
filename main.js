@@ -99,7 +99,15 @@ let currentStreetSpeed = 0;
 // Timer / scoring persistence
 const ROUND_TIME_START = 45; // seconds
 let timeLeft = ROUND_TIME_START;
-let bestScore = Number(localStorage.getItem('ss13_best') || '0');
+// Guard localStorage access for environments where it's blocked (e.g., file:// on some Android Chrome setups)
+let bestScore = 0;
+try {
+  const stored = localStorage.getItem('ss13_best');
+  bestScore = Number(stored || '0');
+  if (!Number.isFinite(bestScore)) bestScore = 0;
+} catch {
+  bestScore = 0;
+}
 // Time bonuses
 const WORD_COMPLETE_TIME_BONUS = 6; // seconds gained when completing a word
 const LEVEL_UP_TIME_BONUS = 10; // additional seconds gained when leveling up
