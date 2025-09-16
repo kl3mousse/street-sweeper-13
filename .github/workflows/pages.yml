@@ -27,10 +27,10 @@ jobs:
       - name: Build static site and package .xdc
         run: |
           mkdir -p dist
-          cp index.html styles.css main.js manifest.toml dist/
+          cp index.html styles.css main.js manifest.toml icon.png dist/
           cp -R assets dist/assets
           cd dist
-          zip -9r street-sweeper-13.xdc index.html styles.css main.js manifest.toml assets
+          zip -9r street-sweeper-13.xdc index.html styles.css main.js manifest.toml icon.png assets
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

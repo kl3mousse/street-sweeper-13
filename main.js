@@ -99,6 +99,9 @@ let currentStreetSpeed = 0;
 const ROUND_TIME_START = 45; // seconds
 let timeLeft = ROUND_TIME_START;
 let bestScore = Number(localStorage.getItem('ss13_best') || '0');
+// Time bonuses
+const WORD_COMPLETE_TIME_BONUS = 6; // seconds gained when completing a word
+const LEVEL_UP_TIME_BONUS = 10; // additional seconds gained when leveling up
 // Cities / levels ----------------------------------------------------------
 const CITIES = [
   { name: 'Marseille', bgColor: '#4477aa' },
@@ -108,7 +111,18 @@ const CITIES = [
 ];
 let cityIndex = 0; // index into CITIES
 let wordsCompleted = 0; // total words completed this run
-let levelUpTimer = 0; // seconds remaining for level-up banner
+let levelUpTimer = 0; // seconds remaining for level-up overlay (separate from scrolling banner)
+// Scrolling level banner that appears at level start and level-up
+/** @type {{text:string,x:number,y:number,active:boolean} | null} */
+let levelBanner = null;
+function triggerLevelBanner() {
+  const level = Math.floor(wordsCompleted / 10) + 1;
+  const cityName = CITIES[cityIndex]?.name || '';
+  const text = `Level ${level}: ${cityName} — Score: ${score}`;
+  // Start to the right of the canvas and scroll left; draw near bottom with a small margin
+  const margin = 6;
+  levelBanner = { text, x: canvas.width + 10, y: canvas.height - margin, active: true };
+}
 // Floating feedback texts
 /** @type {{text:string,x:number,y:number,alpha:number,vy:number,color:string,life:number}[]} */
 let floaters = [];
@@ -487,6 +501,11 @@ function loop(ts) {
         streetScrollX = (streetScrollX + currentStreetSpeed * dt) % wrap;
       }
 
+      // Update scrolling level banner position
+      if (levelBanner && levelBanner.active) {
+        levelBanner.x -= currentStreetSpeed * dt;
+      }
+
       // Collision detection: simple AABB vs letter
       if (player) {
         const { x: px, y: py, w: pw, h: ph } = player.getCollisionRect();
@@ -506,6 +525,12 @@ function loop(ts) {
               if (currentIndex >= targetWord.length) {
                 // Word completed: small bonus and new word
                 score += 500; // bonus
+                // Time bonus on word completion
+                timeLeft = Math.min(ROUND_TIME_START, timeLeft + WORD_COMPLETE_TIME_BONUS);
+                if (player) {
+                  const { x: px, y: py, w: pw } = player.getCollisionRect();
+                  addFloater(`+${WORD_COMPLETE_TIME_BONUS}s`, px + pw + 4, py + 20, '#00ffcc');
+                }
                 // Increase difficulty for future letters
                 letterSpeedMin += SPEED_INCREMENT;
                 letterSpeedMax += SPEED_INCREMENT;
@@ -522,6 +547,17 @@ function loop(ts) {
                   neededSafetyTimer = 0;
                   obstacleSpawnTimer = 0; // interval will be recomputed each frame based on level
                   levelUpTimer = 2.0; // show banner 2s
+                  // Time bonus on level-up
+                  timeLeft = Math.min(ROUND_TIME_START, timeLeft + LEVEL_UP_TIME_BONUS);
+                  if (player) {
+                    const { x: px, y: py, w: pw } = player.getCollisionRect();
+                    addFloater(`+${LEVEL_UP_TIME_BONUS}s`, px + pw + 4, py + 30, '#ffd400');
+                  }
+                  // Trigger scrolling level banner for new level
+                  triggerLevelBanner();
+                } else {
+                  // Not a level-up, still show city & score scroll on word completion
+                  triggerLevelBanner();
                 }
                 // Start celebration/focus pause sequence
                 lastCompletedWord = targetWord;
@@ -658,14 +694,7 @@ function loop(ts) {
     ctx.fillStyle = HUD_COLOR;
     ctx.fillText(`${Math.ceil(timeLeft)}s`, canvas.width - margin, margin);
 
-    // Bottom: City + Level centered
-    const level = Math.floor(wordsCompleted / 10) + 1;
-    const cityName = CITIES[cityIndex]?.name || '—';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.font = '12px monospace';
-    ctx.fillStyle = HUD_COLOR;
-    ctx.fillText(`🏙️ Level ${level}: ${cityName}`, canvas.width / 2, canvas.height - margin);
+    // Bottom: City + Level removed from static HUD; shown as a scrolling banner instead
   }
 
   // Timer bar at the very top of the canvas
@@ -681,6 +710,35 @@ function loop(ts) {
     else if (timeLeft <= 10) col = '#ff4444';
     ctx.fillStyle = col;
     ctx.fillRect(pad, pad, Math.floor((canvas.width - pad * 2) * pct), h);
+  }
+
+  // Scrolling level banner: appears at level start, on level-up, and on word completion.
+  // Draw it late so it appears above gameplay and overlays.
+  if (state === GameState.RUN && levelBanner && levelBanner.active) {
+    const margin = 6;
+    const text = levelBanner.text;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.font = '12px monospace';
+    const metrics = ctx.measureText(text);
+    const w = Math.ceil(metrics.width) + 12; // padding
+    const h = 16;
+    const x = Math.round(levelBanner.x);
+    const y = levelBanner.y;
+    // Background pill
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(x - 6, y - h + 2, w, h);
+    // Border
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - 6 + 0.5, y - h + 2 + 0.5, w, h);
+    // Text
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(text, x, y);
+    // Deactivate once fully off-screen
+    if (x + w < 0) {
+      levelBanner.active = false;
+    }
   }
 
   // Lane guides removed for cleaner visuals
@@ -906,6 +964,9 @@ function _setStateWrapper(next) {
     wordsCompleted = 0;
     levelUpTimer = 0;
     spawnInterval = 1.5;
+    // Trigger banner for level start
+    levelBanner = null;
+    triggerLevelBanner();
   }
   if (next === GameState.OVER) {
     // Update best score persistence
