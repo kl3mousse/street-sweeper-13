@@ -32,6 +32,77 @@ body {
 h1, h2 { margin: 8px 0 12px; }
 p { margin: 0 0 16px; color: var(--muted); }
 
+/* Start screen layout - full-height visual */
+#start-screen {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh; /* modern mobile vh to include dynamic UI */
+  padding: 0; /* remove padding to avoid horizontal offset */
+  overflow: hidden; /* avoid scrollbars when art covers */
+}
+
+/* Start screen art */
+/* Start art fits within viewport without cropping */
+#start-art {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%); /* center the 100vw image inside narrower container */
+  width: 90vw;
+  height: 95vh;
+  height: 95svh; /* modern mobile vh */
+  object-fit: contain; /* preserve ratio, show full image */
+  object-position: center; 
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  z-index: 0;
+  background: transparent; /* no background on the image element */
+}
+
+/* Start button emphasis */
+/* Start button anchored near bottom */
+#start-screen .btn.primary {
+  position: absolute;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 1; /* above the art */
+  /* Green, prominent circular play button */
+  background: #10b981; /* emerald */
+  border-color: #10b981;
+  color: #03140f;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35), 0 0 0 1px rgba(0,0,0,0.2) inset;
+}
+#start-screen .btn.primary:hover {
+  background: #0e9f6e;
+  border-color: #0e9f6e;
+}
+#start-screen .btn.primary svg { display: block; }
+
+/* Subtle background gradient behind the contained image */
+#start-screen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1; /* sits behind image */
+  background: radial-gradient(120% 120% at 50% 20%, rgba(0, 209, 143, 0.15), rgba(0,0,0,0) 60%),
+              linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0) 40%),
+              var(--bg);
+}
+
+@media (max-width: 480px) {
+  #start-screen .btn.primary {
+    width: 52px;
+    height: 52px;
+  }
+}
+
 .btn {
   appearance: none;
   border: 1px solid #2c3642;

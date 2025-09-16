@@ -11,16 +11,16 @@
     <div id="app" class="app">
       <!-- Start Screen -->
       <section id="start-screen" class="screen">
-        <h1>Street Sweeper 13</h1>
-        <p>Press start to begin sweeping the streets.</p>
-        <button id="start-btn" class="btn primary">Start Game</button>
+        <img id="start-art" src="assets/game-start-screen.png" alt="Street Sweeper 13 title art" />
+        <button id="start-btn" class="btn primary" aria-label="Start Game" title="Start Game">
+          <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M8 5v14l11-7z"/>
+          </svg>
+        </button>
       </section>
 
       <!-- Game Screen -->
       <section id="game-screen" class="screen hidden">
-        <div class="toolbar">
-          <button id="gameover-btn" class="btn">Game Over</button>
-        </div>
         <canvas id="game" width="320" height="180"></canvas>
       </section>
 
@@ -33,10 +33,6 @@
           <button id="restart-btn" class="btn primary">Restart</button>
           <button id="back-btn" class="btn">Back to Start</button>
         </div>
-        <p style="margin-top: 16px; color: var(--muted); font-size: 12px;">
-          Looking for the WebXDC package? When deployed on GitHub Pages,
-          you can download <a href="street-sweeper-13.xdc">street-sweeper-13.xdc</a> from this page.
-        </p>
       </section>
     </div>
   </body>

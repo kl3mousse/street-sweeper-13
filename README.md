@@ -14,6 +14,8 @@ If you enjoyed it, consider supporting independent booksellers by picking up the
 
 *These are not affiliate links. Please avoid Amazon and other monopolies — choose independents whenever you can.*
 
+Game art is inspired by Jibé Pollien pixel art from the book above.
+Road art is taken from Dylan Macgillavry on [Art Station](https://www.artstation.com/artwork/0nxqyG)
 
 ## How to Play
 - **Goal**: Collect letters in the correct order to spell words before time runs out

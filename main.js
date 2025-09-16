@@ -20,7 +20,6 @@ const overFinal = document.getElementById('over-final');
 const overBest = document.getElementById('over-best');
 
 const startBtn = document.getElementById('start-btn');
-const gameOverBtn = document.getElementById('gameover-btn');
 const restartBtn = document.getElementById('restart-btn');
 const backBtn = document.getElementById('back-btn');
 
@@ -33,7 +32,6 @@ function setState(next) {
 }
 
 startBtn.addEventListener('click', () => setState(GameState.RUN));
-gameOverBtn.addEventListener('click', () => setState(GameState.OVER));
 restartBtn.addEventListener('click', () => setState(GameState.RUN));
 backBtn.addEventListener('click', () => setState(GameState.START));
 
@@ -41,15 +39,46 @@ backBtn.addEventListener('click', () => setState(GameState.START));
 const CLEAR_COLOR = '#101820'; // deep navy
 const HUD_COLOR = '#eaeaea';
 const DEBUG = false; // set to true to show debug overlays
+// Separate toggle to show collision boxes at runtime (press 'H')
+let SHOW_HITBOXES = false;
+
+// Scrolling street background (pixel art)
+const streetImg = new Image();
+streetImg.src = 'assets/street.png';
+let streetLoaded = false;
+streetImg.onload = () => { streetLoaded = true; };
+let streetScrollX = 0; // pixels, increasing moves background left
+
+// Foreground sidewalk/city layer (e.g., Marseille), scrolls same as street
+const marseilleImg = new Image();
+marseilleImg.src = 'assets/marseille.png';
+let marseilleLoaded = false;
+marseilleImg.onload = () => { marseilleLoaded = true; };
 
 // Lanes and player config
 const LANES = 3;
 const PLAYER_X = 40; // fixed left-side x
-const PLAYER_W = 18;
-const PLAYER_H = 18;
+const PLAYER_W = 32; // collision width
+const PLAYER_H = 18; // collision height
+// Visual draw size (bigger than collision for nicer look)
+const PLAYER_DRAW_W = 64;
+const PLAYER_DRAW_H = 64;
+// Vertical anchor: bottom of sprite (and collision box) sits slightly below the lane center
+const PLAYER_FOOT_OFFSET = 10; // px below lane line
 const PLAYER_COLOR = '#00d18f';
 const LETTER_SIZE = 18;
-const MAX_PER_LANE = 3;
+const MAX_PER_LANE = 2;
+
+// Player sprite (2-frame spritesheet, 64x64 per frame)
+const PLAYER_SPRITE_SRC = 'assets/player.png'; // place your attached PNG here
+const PLAYER_FRAME_W = 64;
+const PLAYER_FRAME_H = 64;
+const PLAYER_FRAME_COUNT = 2;
+const PLAYER_FRAME_DURATION = 0.2; // seconds per frame
+const playerImg = new Image();
+playerImg.src = PLAYER_SPRITE_SRC;
+let playerImgLoaded = false;
+playerImg.onload = () => { playerImgLoaded = true; };
 
 // Game progression / HUD
 const WORDS = ["POULET", "CHAT", "BUS"]; // target words
@@ -63,6 +92,8 @@ const PLAYER_FLASH_TIME = 0.2;
 let letterSpeedMin = 60; // px/s
 let letterSpeedMax = 80; // px/s
 const SPEED_INCREMENT = 5; // per completed word
+// Shared background/obstacle scroll speed (px/s), computed each frame
+let currentStreetSpeed = 0;
 
 // Timer / scoring persistence
 const ROUND_TIME_START = 45; // seconds
@@ -85,13 +116,27 @@ function addFloater(text, x, y, color = '#ffffff') {
   floaters.push({ text, x, y, alpha: 1, vy: -24, color, life: 1.0 }); // ~1s life
 }
 
+// Word completion phases (pause gameplay): celebrate -> focus -> resume
+const WORD_CELEBRATE_TIME = 2.2; // seconds
+const WORD_FOCUS_TIME = 1.2; // seconds
+/** @type {'none'|'celebrate'|'focus'} */
+let wordPhase = 'none';
+let wordPhaseTimer = 0; // seconds remaining in current phase
+let lastCompletedWord = '';
+let nextWordPending = '';
+
 /**
  * Compute the center Y for a lane index [0..LANES-1]
  * Evenly spaces lanes across the canvas height (centers at 1/(L+1), ..., L/(L+1)).
  */
 function laneCenterY(idx) {
-  const spacing = canvas.height / (LANES + 1);
-  return Math.round(spacing * (idx + 1));
+  // Custom lane positions:
+  // Top:   5/8 from bottom -> 3/8 from top
+  // Middle:3/8 from bottom -> 5/8 from top
+  // Bottom:1/8 from bottom -> 7/8 from top
+  // For idx = 0,1,2 => fractions 3/8, 5/8, 7/8 of canvas height
+  const fractionFromTop = (3 + 2 * idx) / 8; // 0.375, 0.625, 0.875
+  return Math.round(canvas.height * fractionFromTop);
 }
 
 class Player {
@@ -100,10 +145,37 @@ class Player {
     this.w = PLAYER_W;
     this.h = PLAYER_H;
     this.lane = 1; // start in middle lane [0,1,2]
+    // animation state
+    this.frame = 0;
+    this.animTime = 0; // accumulates dt
   }
 
   reset() {
     this.lane = 1;
+    this.frame = 0;
+    this.animTime = 0;
+  }
+
+  /** Collision rectangle: bottom aligned to lane center + offset (near wheels). */
+  getCollisionRect() {
+    const bottomY = laneCenterY(this.lane) + PLAYER_FOOT_OFFSET;
+    const x = this.x;
+    const y = bottomY - this.h;
+    return { x, y, w: this.w, h: this.h };
+  }
+
+  /** Draw rectangle: bottom aligned to same lane anchor as collision, centered horizontally on hitbox. */
+  getDrawRect() {
+    const { x: baseX } = this.getCollisionRect();
+    const bottomY = laneCenterY(this.lane) + PLAYER_FOOT_OFFSET;
+    const dw = PLAYER_DRAW_W;
+    const dh = PLAYER_DRAW_H;
+    return {
+      x: baseX + (this.w - dw) / 2,
+      y: bottomY - dh,
+      w: dw,
+      h: dh,
+    };
   }
 
   moveUp() {
@@ -114,14 +186,34 @@ class Player {
     if (this.lane < LANES - 1) this.lane += 1;
   }
 
+  update(dt) {
+    // advance walking/rolling animation
+    this.animTime += dt;
+    while (this.animTime >= PLAYER_FRAME_DURATION) {
+      this.animTime -= PLAYER_FRAME_DURATION;
+      this.frame = (this.frame + 1) % PLAYER_FRAME_COUNT;
+    }
+  }
+
   draw(ctx) {
-    const cy = laneCenterY(this.lane);
-    // draw as a simple rounded rectangle placeholder
-    ctx.fillStyle = PLAYER_COLOR;
-    const x = this.x;
-    const y = cy - this.h / 2;
-    // simple rect for now
-    ctx.fillRect(x, y, this.w, this.h);
+    const { x, y, w, h } = this.getDrawRect();
+
+    if (playerImgLoaded) {
+      // Source rectangle for current frame
+      const sx = this.frame * PLAYER_FRAME_W;
+      const sy = 0;
+      const sw = PLAYER_FRAME_W;
+      const sh = PLAYER_FRAME_H;
+      // Draw scaled down to 18x18 keeping pixel crispness
+      const prevSmoothing = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(playerImg, sx, sy, sw, sh, x, y, w, h);
+      ctx.imageSmoothingEnabled = prevSmoothing;
+    } else {
+      // Fallback: placeholder rect until image loads
+      ctx.fillStyle = PLAYER_COLOR;
+      ctx.fillRect(x, y, w, h);
+    }
   }
 }
 
@@ -172,62 +264,85 @@ class Letter {
 /** @type {Letter[]} */
 let letters = [];
 let spawnTimer = 0;
-let spawnInterval = 1.5; // seconds between spawns
+let spawnInterval = 1.7; // seconds between spawns
 let neededSafetyTimer = 0; // ensure needed letter at least every 2s
 
 // Obstacles ---------------------------------------------------------------
-const OBSTACLE_TYPES = /** @type {const} */(['trash','pothole','cone']);
-// High-contrast colors so obstacles are clearly visible against the dark background
-const OBSTACLE_COLORS = { trash: '#00ff7f', pothole: '#ff00ff', cone: '#ffd400' };
-/** @type {{ trash: {w:number,h:number}, pothole:{w:number,h:number}, cone:{w:number,h:number} }} */
-const OBSTACLE_SIZES = {
-  trash: { w: 18, h: 18 },
-  pothole: { w: 24, h: 8 },
-  cone: { w: 12, h: 20 },
-};
+const OBSTACLE_TYPES = /** @type {const} */(['trash','pothole','cone']); // kept for spawn variety, not used for size
+
+// Obstacle sprite sheet (Marseille) — 5 frames, 32x32 each
+const OBST_SHEET_SRC = 'assets/marseille-obstacles.png';
+const obstacleImg = new Image();
+obstacleImg.src = OBST_SHEET_SRC;
+let obstacleImgLoaded = false;
+obstacleImg.onload = () => { obstacleImgLoaded = true; };
+const OBST_SPRITE_W = 32;
+const OBST_SPRITE_H = 32;
+const OBST_SPRITE_COUNT = 5;
+// Unified hitbox: 16x24, centered horizontally, bottom-aligned to lane
+const OBST_HIT_W = 16;
+const OBST_HIT_H = 24;
+const OBST_FOOT_OFFSET = PLAYER_FOOT_OFFSET; // align to same ground line as player
 
 class Obstacle {
   /** @param {'trash'|'pothole'|'cone'} type @param {number} lane */
   constructor(type, lane) {
     this.type = type;
     this.lane = lane;
-    const size = OBSTACLE_SIZES[type];
-    this.w = size.w;
-    this.h = size.h;
-    // Pothole is flat on lane center; others centered vertically on lane
-    const cy = laneCenterY(lane);
-    this.y = cy - (type === 'pothole' ? this.h / 2 : this.h / 2);
+    // Hitbox dimensions (collision)
+    this.w = OBST_HIT_W;
+    this.h = OBST_HIT_H;
+    // Vertical position: bottom aligned to lane center + offset
+    const bottomY = laneCenterY(lane) + OBST_FOOT_OFFSET;
+    this.y = bottomY - this.h;
     this.x = canvas.width;
     this.speed = randomInt(letterSpeedMin, letterSpeedMax);
+    // Choose a random sprite frame [0..4]
+    this.frame = Math.floor(Math.random() * OBST_SPRITE_COUNT);
   }
 
-  update(dt) { this.x -= this.speed * dt; }
-  isOffscreen() { return this.x + this.w < 0; }
+  update(dt) {
+    // Move at the exact same speed as the street background for perfect sync
+    this.x -= currentStreetSpeed * dt;
+  }
+  isOffscreen() {
+    // Consider sprite width and centering so we don't cull while still visible
+    const dw = OBST_SPRITE_W;
+    const dx = this.x + (this.w - dw) / 2;
+    return dx + dw < 0;
+  }
   draw(ctx) {
-    ctx.fillStyle = OBSTACLE_COLORS[this.type];
-    ctx.fillRect(this.x, this.y, this.w, this.h);
-    // simple accents for readability
-    if (this.type === 'trash') {
-      ctx.fillStyle = '#2e3a1a';
-      ctx.fillRect(this.x + 4, this.y + 4, this.w - 8, this.h - 8);
-    } else if (this.type === 'cone') {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(this.x + 2, this.y + this.h - 6, this.w - 4, 3);
-    } else if (this.type === 'pothole') {
-      ctx.fillStyle = '#222222';
-      ctx.fillRect(this.x + 2, this.y + this.h/2 - 1, this.w - 4, 2);
+    if (obstacleImgLoaded) {
+      const sx = (this.frame % OBST_SPRITE_COUNT) * OBST_SPRITE_W;
+      const sy = 0;
+      const sw = OBST_SPRITE_W;
+      const sh = OBST_SPRITE_H;
+      // Draw rect bottom-aligned to lane, centered on hitbox
+      const dw = OBST_SPRITE_W;
+      const dh = OBST_SPRITE_H;
+      const dx = this.x + (this.w - dw) / 2;
+      const dy = (this.y + this.h) - dh; // bottom align sprite to collision bottom
+      const prev = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(obstacleImg, sx, sy, sw, sh, Math.round(dx), Math.round(dy), dw, dh);
+      ctx.imageSmoothingEnabled = prev;
+    } else {
+      // Fallback: simple placeholder until sprite loads
+      ctx.fillStyle = '#8888ff';
+      ctx.fillRect(this.x, this.y, this.w, this.h);
     }
-    // outline (high contrast)
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(this.x + 0.5, this.y + 0.5, this.w, this.h);
   }
 }
 
 /** @type {Obstacle[]} */
 let obstacles = [];
 let obstacleSpawnTimer = 0;
-let obstacleSpawnInterval = 2.0; // seconds (was 3.0)
+// Base obstacle spawn pacing is now level-scaled (computed each frame); this is an initial value only
+let obstacleSpawnInterval = 4.2; // seconds at init; Level 1 will override to ~4.0s
+// Obstacle-only per-lane cap to reduce stacked hazards on the same lane
+const OBST_MAX_PER_LANE = 1;
+// Global cap to avoid overcrowding (fits 3 lanes well)
+const OBST_MAX_TOTAL = 2;
 
 let lastTime = 0;
 
@@ -241,8 +356,29 @@ function loop(ts) {
       // No game updates in start screen
       break;
     case GameState.RUN:
-      // Timer
-      timeLeft -= dt;
+      // Handle word-completion pause phases early (freeze gameplay while active)
+      if (wordPhase !== 'none') {
+        const dur = wordPhase === 'celebrate' ? WORD_CELEBRATE_TIME : WORD_FOCUS_TIME;
+        wordPhaseTimer = Math.max(0, wordPhaseTimer - dt);
+        if (wordPhaseTimer === 0) {
+          if (wordPhase === 'celebrate') {
+            // Switch to focus phase and reveal the new target word
+            if (!nextWordPending) nextWordPending = WORDS[Math.floor(Math.random() * WORDS.length)];
+            targetWord = nextWordPending;
+            currentIndex = 0;
+            nextWordPending = '';
+            wordPhase = 'focus';
+            wordPhaseTimer = WORD_FOCUS_TIME;
+          } else {
+            // End focus phase, resume gameplay
+            wordPhase = 'none';
+          }
+        }
+        // Skip the rest of RUN updates while paused
+        break;
+      }
+      // Timer (frozen during wordPhase)
+      if (wordPhase === 'none') timeLeft -= dt;
       if (timeLeft <= 0) {
         timeLeft = 0;
         _setStateWrapper(GameState.OVER);
@@ -251,9 +387,12 @@ function loop(ts) {
       // Level-up banner timer
       if (levelUpTimer > 0) levelUpTimer = Math.max(0, levelUpTimer - dt);
   // Spawn letters on interval with weights and safety
-      spawnTimer += dt;
-      neededSafetyTimer += dt;
-      while (spawnTimer >= spawnInterval) {
+      if (wordPhase === 'none') {
+        spawnTimer += dt;
+        neededSafetyTimer += dt;
+      }
+      // Spawn at most one letter per interval to avoid unfair simultaneous walls
+      if (spawnTimer >= spawnInterval) {
         // Count letters per lane to enforce caps
         const laneCounts = new Array(LANES).fill(0);
         for (const l of letters) laneCounts[l.lane]++;
@@ -292,29 +431,25 @@ function loop(ts) {
           spawnChar(distractor);
         }
 
-        // Optional extra distractors for pressure
-        if (Math.random() < 0.3) {
-          const d1 = randomLetterExcluding(nextNeededChar);
-          spawnChar(d1);
-          // 50% chance for a second extra distractor if space remains
-          if (Math.random() < 0.5) {
-            const d2 = randomLetterExcluding(nextNeededChar);
-            spawnChar(d2);
-          }
-        }
-
         spawnTimer -= spawnInterval;
       }
 
-      // Spawn obstacles independently
-      obstacleSpawnTimer += dt;
-      while (obstacleSpawnTimer >= obstacleSpawnInterval) {
+      // Spawn obstacles independently (frozen during wordPhase)
+      // Scale obstacle spawn interval by level: easier early, slightly faster later (min 2.4s)
+      {
+        const level = Math.floor(wordsCompleted / 10) + 1; // 1-based level
+        const desired = Math.max(2.4, 4.0 - 0.25 * (level - 1));
+        obstacleSpawnInterval = desired;
+      }
+      if (wordPhase === 'none') obstacleSpawnTimer += dt;
+      // At most one obstacle per interval
+      if (obstacleSpawnTimer >= obstacleSpawnInterval) {
         // Count per-lane caps for obstacles only (independent of letters)
         const laneCounts = new Array(LANES).fill(0);
         for (const o of obstacles) laneCounts[o.lane]++;
         const availableLanes = [];
-        for (let i = 0; i < LANES; i++) if (laneCounts[i] < MAX_PER_LANE) availableLanes.push(i);
-        if (availableLanes.length > 0) {
+        for (let i = 0; i < LANES; i++) if (laneCounts[i] < OBST_MAX_PER_LANE) availableLanes.push(i);
+        if (availableLanes.length > 0 && obstacles.length < OBST_MAX_TOTAL) {
           const lane = availableLanes[Math.floor(Math.random() * availableLanes.length)];
           const type = OBSTACLE_TYPES[Math.floor(Math.random() * OBSTACLE_TYPES.length)];
           obstacles.push(new Obstacle(type, lane));
@@ -328,7 +463,7 @@ function loop(ts) {
   for (let i = 0; i < obstacles.length; i++) obstacles[i].update(dt);
   if (obstacles.length) obstacles = obstacles.filter(o => !o.isOffscreen());
   // Update floaters
-  if (floaters.length) {
+  if (floaters.length && wordPhase === 'none') {
     for (let i = floaters.length - 1; i >= 0; i--) {
       const f = floaters[i];
       f.y += f.vy * dt;
@@ -338,13 +473,23 @@ function loop(ts) {
     }
   }
 
-      // Player flash timer decay
+  // Player flash timer decay
       if (playerFlashTimer > 0) playerFlashTimer = Math.max(0, playerFlashTimer - dt);
+
+  // Player animation update
+  if (player && wordPhase === 'none') player.update(dt);
+
+      // Compute shared street speed once per frame and use it for background and obstacles
+  currentStreetSpeed = (wordPhase === 'none') ? Math.max(24, Math.min(120, letterSpeedMin * 0.6)) : 0; // px/s
+      // Update street scroll with the same speed
+      if (streetLoaded || marseilleLoaded) {
+        const wrap = (streetImg.width || marseilleImg.width || 320);
+        streetScrollX = (streetScrollX + currentStreetSpeed * dt) % wrap;
+      }
 
       // Collision detection: simple AABB vs letter
       if (player) {
-        const px = player.x, py = laneCenterY(player.lane) - player.h / 2;
-        const pw = player.w, ph = player.h;
+        const { x: px, y: py, w: pw, h: ph } = player.getCollisionRect();
         for (let i = letters.length - 1; i >= 0; i--) {
           const l = letters[i];
           if (l.x < px + pw && l.x + l.w > px && l.y < py + ph && l.y + l.h > py) {
@@ -375,11 +520,14 @@ function loop(ts) {
                   // reset spawn timers
                   spawnTimer = 0;
                   neededSafetyTimer = 0;
-                  obstacleSpawnTimer = 0;
+                  obstacleSpawnTimer = 0; // interval will be recomputed each frame based on level
                   levelUpTimer = 2.0; // show banner 2s
                 }
-                targetWord = WORDS[Math.floor(Math.random() * WORDS.length)];
-                currentIndex = 0;
+                // Start celebration/focus pause sequence
+                lastCompletedWord = targetWord;
+                nextWordPending = WORDS[Math.floor(Math.random() * WORDS.length)];
+                wordPhase = 'celebrate';
+                wordPhaseTimer = WORD_CELEBRATE_TIME;
               }
             } else {
               // Wrong letter: lose life and flash
@@ -423,6 +571,37 @@ function loop(ts) {
   const bg = (CITIES[cityIndex] && CITIES[cityIndex].bgColor) || CLEAR_COLOR;
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw scrolling street background aligned to bottom
+  if (state === GameState.RUN && streetLoaded) {
+    const y = canvas.height - streetImg.height; // bottom align
+    const w = streetImg.width;
+    const h = streetImg.height;
+    const prevSmooth = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    // Start drawing from negative offset so that the image appears shifted by streetScrollX
+    let startX = -streetScrollX;
+    // Draw enough tiles to cover the entire canvas width
+    for (let x = startX; x < canvas.width; x += w) {
+      ctx.drawImage(streetImg, 0, 0, w, h, Math.round(x), y, w, h);
+    }
+    ctx.imageSmoothingEnabled = prevSmooth;
+  }
+
+  // Draw Marseille layer above street, bottom aligned to 12px above the upper lane
+  if (state === GameState.RUN && marseilleLoaded) {
+    const bottomAnchor = laneCenterY(0) - 12; // 12px above upper lane
+    const w = marseilleImg.width;
+    const h = marseilleImg.height;
+    const y = bottomAnchor - h;
+    const prevSmooth = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    let startX = -streetScrollX;
+    for (let x = startX; x < canvas.width; x += w) {
+      ctx.drawImage(marseilleImg, 0, 0, w, h, Math.round(x), y, w, h);
+    }
+    ctx.imageSmoothingEnabled = prevSmooth;
+  }
 
   // Debug: state label
   if (DEBUG) {
@@ -486,7 +665,7 @@ function loop(ts) {
     ctx.textBaseline = 'bottom';
     ctx.font = '12px monospace';
     ctx.fillStyle = HUD_COLOR;
-    ctx.fillText(`Ville: ${cityName} — Niveau ${level}`, canvas.width / 2, canvas.height - margin);
+    ctx.fillText(`🏙️ Level ${level}: ${cityName}`, canvas.width / 2, canvas.height - margin);
   }
 
   // Timer bar at the very top of the canvas
@@ -504,21 +683,10 @@ function loop(ts) {
     ctx.fillRect(pad, pad, Math.floor((canvas.width - pad * 2) * pct), h);
   }
 
-  // Draw lanes guides (subtle)
-  if (state === GameState.RUN) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < LANES; i++) {
-      const y = laneCenterY(i);
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
-      ctx.stroke();
-    }
-  }
+  // Lane guides removed for cleaner visuals
 
   // Draw letters first, then obstacles so obstacles appear on top
-  if (state === GameState.RUN) {
+  if (state === GameState.RUN && wordPhase === 'none') {
     for (let i = 0; i < letters.length; i++) letters[i].draw(ctx);
     // ensure full opacity for obstacles
     ctx.globalAlpha = 1;
@@ -532,14 +700,14 @@ function loop(ts) {
   }
 
   // Draw player
-  if (state === GameState.RUN && player) {
+  if (state === GameState.RUN && player && wordPhase === 'none') {
     if (playerFlashTimer > 0) {
       // draw flashing effect by alternating color overlay
       player.draw(ctx);
       ctx.globalAlpha = 0.5;
       ctx.fillStyle = '#ff4444';
-      const cy = laneCenterY(player.lane);
-      ctx.fillRect(player.x, cy - player.h / 2, player.w, player.h);
+      const dr = player.getDrawRect();
+      ctx.fillRect(dr.x, dr.y, dr.w, dr.h);
       ctx.globalAlpha = 1;
     } else {
       player.draw(ctx);
@@ -579,6 +747,28 @@ function loop(ts) {
     }
   }
 
+  // Collision boxes overlay (toggle with 'H')
+  if (state === GameState.RUN && SHOW_HITBOXES) {
+    ctx.globalAlpha = 1;
+    // Letters
+    ctx.strokeStyle = 'rgba(0,255,255,0.9)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < letters.length; i++) {
+      const l = letters[i];
+      ctx.strokeRect(l.x + 0.5, l.y + 0.5, l.w, l.h);
+    }
+    // Obstacles
+    for (let i = 0; i < obstacles.length; i++) {
+      const o = obstacles[i];
+      ctx.strokeRect(o.x + 0.5, o.y + 0.5, o.w, o.h);
+    }
+    // Player collision rect
+    if (player) {
+      const { x: px, y: py, w: pw, h: ph } = player.getCollisionRect();
+      ctx.strokeRect(px + 0.5, py + 0.5, pw, ph);
+    }
+  }
+
   // Level-up overlay: banner and border pulse
   if (state === GameState.RUN && levelUpTimer > 0) {
     // Banner
@@ -598,6 +788,47 @@ function loop(ts) {
     ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
   }
 
+  // Word celebration/focus overlays
+  if (state === GameState.RUN && wordPhase !== 'none') {
+    // Dim the scene slightly
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (wordPhase === 'celebrate') {
+      // Big celebratory word with pulse/scale effect
+      const t = (WORD_CELEBRATE_TIME - wordPhaseTimer);
+      const scale = 1 + 0.1 * Math.sin(t * 8);
+      ctx.save();
+      ctx.translate(canvas.width/2, canvas.height/2 - 6);
+      ctx.scale(scale, scale);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 24px monospace';
+      ctx.fillText(`${lastCompletedWord} 👍!`, 0, 0);
+      ctx.restore();
+      // Bonus hint below
+      ctx.fillStyle = '#ffd400';
+      ctx.font = '12px monospace';
+      ctx.fillText('+500 bonus', canvas.width/2, canvas.height/2 + 16);
+    } else if (wordPhase === 'focus') {
+      // Focus on the new word: show target with an underline animation
+      const t = (WORD_FOCUS_TIME - wordPhaseTimer);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 20px monospace';
+      ctx.fillText(`🆕♻️ ${targetWord} ♻️🆕`, canvas.width/2, canvas.height/2);
+      // Underline grows from center
+      const total = Math.min(canvas.width - 40, 12 * targetWord.length + 8);
+      const half = (total / 2) * Math.min(1, t / WORD_FOCUS_TIME);
+      const y = canvas.height/2 + 6;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(canvas.width/2 - half, y);
+      ctx.lineTo(canvas.width/2 + half, y);
+      ctx.stroke();
+    }
+  }
+
   requestAnimationFrame(loop);
 }
 
@@ -611,7 +842,7 @@ window.setState = setState;
 
 // Input handling
 window.addEventListener('keydown', (e) => {
-  if (state !== GameState.RUN || !player) return;
+  if (state !== GameState.RUN || !player || wordPhase !== 'none') return;
   if (e.key === 'ArrowUp') {
     player.moveUp();
     e.preventDefault();
@@ -623,7 +854,7 @@ window.addEventListener('keydown', (e) => {
 
 // Mobile / pointer input: tap top/bottom halves of the canvas
 canvas.addEventListener('pointerdown', (e) => {
-  if (state !== GameState.RUN || !player) return;
+  if (state !== GameState.RUN || !player || wordPhase !== 'none') return;
   const rect = canvas.getBoundingClientRect();
   const yClient = e.clientY - rect.top;
   // map to canvas pixel space (height=180)
@@ -657,8 +888,8 @@ function _setStateWrapper(next) {
     spawnTimer = 0;
     neededSafetyTimer = 0;
   obstacles = [];
-  // Schedule an obstacle to spawn immediately on next frame
-  obstacleSpawnTimer = obstacleSpawnInterval;
+  // Start obstacle timer fresh; first obstacle will spawn after the first interval
+  obstacleSpawnTimer = 0;
     // Reset HUD/gameplay stats
     score = 0;
     lives = 3;
@@ -690,15 +921,20 @@ function _setStateWrapper(next) {
 window.setState = _setStateWrapper;
 // Re-wire buttons to wrapper for consistency
 startBtn.replaceWith(startBtn.cloneNode(true));
-gameOverBtn.replaceWith(gameOverBtn.cloneNode(true));
 restartBtn.replaceWith(restartBtn.cloneNode(true));
 backBtn.replaceWith(backBtn.cloneNode(true));
 // Re-query and attach listeners again
 const _startBtn = document.getElementById('start-btn');
-const _gameOverBtn = document.getElementById('gameover-btn');
 const _restartBtn = document.getElementById('restart-btn');
 const _backBtn = document.getElementById('back-btn');
 _startBtn.addEventListener('click', () => _setStateWrapper(GameState.RUN));
-_gameOverBtn.addEventListener('click', () => _setStateWrapper(GameState.OVER));
 _restartBtn.addEventListener('click', () => _setStateWrapper(GameState.RUN));
 _backBtn.addEventListener('click', () => _setStateWrapper(GameState.START));
+
+// Global debug hotkey: toggle collision boxes with 'H'
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'h' || e.key === 'H') {
+    SHOW_HITBOXES = !SHOW_HITBOXES;
+    e.preventDefault();
+  }
+});
