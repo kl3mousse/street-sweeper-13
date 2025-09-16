@@ -1,67 +1,58 @@
 # Street Sweeper 13 (webxdc)
 
-A minimal, self-contained webxdc game scaffold. It shows a canvas with three UI states (start, game, over). In-game, a Player rectangle can move between three lanes. Letters spawn on the right and scroll left across lanes for testing.
+An open-source word-collection game where you control a street sweeper to collect letters and spell French words while avoiding obstacles.
+
+## Credits
+
+This game is a small *clin d'œil* to **ULIS** by Fabien Toulmé (Delcourt, 2025).  
+If you enjoyed it, consider supporting independent booksellers by picking up the book:
+
+- [Éditions Delcourt (publisher’s page)](https://www.editions-delcourt.fr/bd/series/serie-ulis/album-ulis)  
+- [LesLibraires.fr](https://www.leslibraires.fr/livre/24520936-ulis-fabien-toulme-delcourt)  
+- [Librest](https://www.librest.com/livres/ulis-fabien-toulme_0-12492854_9782413088165.html)  
+- [Place des Libraires](https://www.placedeslibraires.fr/livre/9782413088165-ulis-fabien-toulme/)  
+
+*These are not affiliate links. Please avoid Amazon and other monopolies — choose independents whenever you can.*
+
+
+## How to Play
+- **Goal**: Collect letters in the correct order to spell words before time runs out
+- **Controls**: 
+  - Arrow Up/Down: Move between 3 lanes
+  - Touch: Tap top/bottom half of screen to move
+- **Scoring**: +100 per correct letter, +500 per completed word
+- **Hazards**: Wrong letters and obstacles cost lives and time
+
+## Game Features
+- 45-second rounds with time bonuses/penalties
+- 3 lives system with broom emoji indicators
+- Level progression through different cities (every 10 words)
+- Increasing difficulty as you advance
+- Best score tracking
 
 ## Files
-- `index.html` — HTML with start/game/over screens and the `<canvas id="game" width="320" height="180">`.
-- `styles.css` — Centers the canvas, sets pixelated rendering.
-- `main.js` — GameState enum, basic requestAnimationFrame loop, Player class with lane movement and keyboard/touch controls.
-	Also includes a `Letter` class and simple spawner that emits letters every ~1.5s.
-- `manifest.toml` — Minimal metadata for webxdc packaging.
+- `index.html` — Game UI and canvas
+- `styles.css` — Styling and canvas scaling
+- `main.js` — Complete game logic
+- `manifest.toml` — webxdc metadata
+- `AGENTS.md` — Technical documentation for AI agents
 
-## Preferred: run with webxdc-dev
-If you use `webxdc-dev`, you’ll get a quick-refresh preview and packaging helpers.
-
-Install once (global) or use npx on demand:
-
+## Run Development Server
 ```sh
-# Global install (recommended if you use it often)
+# Install webxdc-dev (once)
 npm install -g webxdc-dev
 
-# Or run without installing globally
-npx webxdc-dev
-```
-
-From this folder, start the dev server:
-
-```sh
+# Start dev server
 webxdc-dev
 ```
 
-That will open a local preview. The server watches for changes and reloads.
-
-### npm scripts (optional)
-This repo includes a `package.json` with helpful scripts:
-
+## Package for webxdc
 ```sh
-# Start dev server
-npm run dev
-
-# Package .xdc file
-npm run pack
-```
-
-If you don’t want Node/npm tooling, see the manual run/packaging below.
-
-## Run manually (no tooling)
-You can also open `index.html` directly in your browser. No server or dependencies are required.
-
-When the game is running:
-- Use Arrow Up / Arrow Down to switch the sweeper between 3 lanes.
-- On mobile or touch, tap the top half to move up a lane, or the bottom half to move down.
- - Letters will appear from the right and move left continuously (no collision yet).
-
-## Package for webxdc (manual)
-Create a `.xdc` by zipping these files (flat, without extra folder nesting) and renaming the zip to `.xdc`:
-
-```sh
-# From the project directory
+# Create .xdc file
 zip -9r street-sweeper-13.xdc index.html styles.css main.js manifest.toml
 ```
 
-Then share `street-sweeper-13.xdc` in a WebXDC-compatible chat app.
+Share the `.xdc` file in any WebXDC-compatible chat app.
 
-## Next steps
-- Add input handling and actual gameplay.
-- Draw simple pixel art and sprites.
-- Persist high scores using `webxdc.storage` if desired.
+## Debug Mode
+Set `DEBUG = true` at the top of `main.js` to see entity counts and collision boxes.
