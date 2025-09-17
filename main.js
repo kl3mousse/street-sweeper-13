@@ -1,5 +1,7 @@
 // Street Sweeper 13 - minimal game loop and state machine
 
+const DEBUG = true; // set to true to show debug overlays and allow H & L keys in game
+
 /** @enum {number} */
 const GameState = {
   START: 0,
@@ -17,12 +19,21 @@ const ctx = canvas.getContext('2d');
 const startScreen = document.getElementById('start-screen');
 const gameScreen = document.getElementById('game-screen');
 const overScreen = document.getElementById('over-screen');
+const settingsScreen = document.getElementById('settings-screen');
 const overFinal = document.getElementById('over-final');
 const overBest = document.getElementById('over-best');
 
 const startBtn = document.getElementById('start-btn');
-const restartBtn = document.getElementById('restart-btn');
+const settingsBtn = document.getElementById('settings-btn');
 const backBtn = document.getElementById('back-btn');
+const settingsBackBtn = document.getElementById('settings-back-btn');
+const diffEasy = document.getElementById('diff-easy');
+const diffNormal = document.getElementById('diff-normal');
+// Training words UI
+const wordsListEl = document.getElementById('words-list');
+const newWordInput = document.getElementById('new-word');
+const addWordBtn = document.getElementById('add-word-btn');
+const resetWordsBtn = document.getElementById('reset-words-btn');
 
 function setState(next) {
   state = next;
@@ -30,31 +41,191 @@ function setState(next) {
   startScreen.classList.toggle('hidden', state !== GameState.START);
   gameScreen.classList.toggle('hidden', state !== GameState.RUN);
   overScreen.classList.toggle('hidden', state !== GameState.OVER);
+  if (settingsScreen) settingsScreen.classList.add('hidden');
 }
 
 if (startBtn) startBtn.addEventListener('click', () => setState(GameState.RUN));
-if (restartBtn) restartBtn.addEventListener('click', () => setState(GameState.RUN));
+if (settingsBtn) settingsBtn.addEventListener('click', () => {
+  // Show settings screen; hide others
+  startScreen.classList.add('hidden');
+  gameScreen.classList.add('hidden');
+  overScreen.classList.add('hidden');
+  if (settingsScreen) settingsScreen.classList.remove('hidden');
+  // Reflect difficulty selection
+  if (diffEasy) diffEasy.checked = (DIFFICULTY === 'easy');
+  if (diffNormal) diffNormal.checked = (DIFFICULTY === 'normal');
+  // Render current training words
+  renderWordsList();
+});
 if (backBtn) backBtn.addEventListener('click', () => setState(GameState.START));
+if (settingsBackBtn) settingsBackBtn.addEventListener('click', () => setState(GameState.START));
+// removed hitbox checkbox UI; H hotkey remains
+
+// Difficulty handling
+function applyDifficulty(diff) {
+  DIFFICULTY = diff;
+  try { localStorage.setItem('ss13_difficulty', DIFFICULTY); } catch {}
+  if (DIFFICULTY === 'easy') {
+    obstacles = [];
+    obstacleSpawnTimer = 0;
+  }
+}
+if (diffEasy) diffEasy.addEventListener('change', (e) => {
+  if (/** @type {HTMLInputElement} */(e.target).checked) applyDifficulty('easy');
+});
+if (diffNormal) diffNormal.addEventListener('change', (e) => {
+  if (/** @type {HTMLInputElement} */(e.target).checked) applyDifficulty('normal');
+});
+
+// Training words management -------------------------------------------------
+function renderWordsList() {
+  const container = document.getElementById('words-list');
+  if (!container) return;
+  // Clear existing
+  container.textContent = '';
+  const list = getActiveWords();
+  for (const w of list) {
+    const chip = document.createElement('span');
+    chip.style.display = 'inline-flex';
+    chip.style.alignItems = 'center';
+    chip.style.gap = '6px';
+    chip.style.padding = '6px 8px';
+    chip.style.border = '1px solid #2c3642';
+    chip.style.borderRadius = '8px';
+    chip.style.background = '#0d131a';
+    chip.style.color = '#eaeaea';
+    chip.style.font = '12px monospace';
+    // word text
+    const text = document.createElement('span');
+    text.textContent = w;
+    chip.appendChild(text);
+    // remove button
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '×';
+    btn.title = 'Remove';
+    btn.style.border = 'none';
+    btn.style.outline = 'none';
+    btn.style.cursor = 'pointer';
+    btn.style.background = 'transparent';
+    btn.style.color = '#93a1b0';
+    btn.style.font = 'bold 14px monospace';
+    btn.style.padding = '0 2px';
+    btn.addEventListener('click', () => {
+      const current = [...getActiveWords()];
+      if (current.length <= 1) {
+        // don't allow removing the last word
+        return;
+      }
+      const idx = current.indexOf(w);
+      if (idx !== -1) current.splice(idx, 1);
+      USER_WORDS = current; // set user list; if equals defaults entirely, keep as explicit list
+      saveUserWords(USER_WORDS);
+      renderWordsList();
+    });
+    chip.appendChild(btn);
+    container.appendChild(chip);
+  }
+}
+
+function addWordFromInput() {
+  const input = /** @type {HTMLInputElement|null} */(document.getElementById('new-word'));
+  if (!input) return;
+  let raw = input.value || '';
+  // Uppercase, allow special characters, trim, max length 12
+  raw = raw.toUpperCase().trim();
+  if (!raw) { input.value = ''; return; }
+  if (raw.length > 12) raw = raw.slice(0, 12);
+  // Build current working list (if defaults active, clone them into user list first)
+  let list = [...getActiveWords()];
+  if (list.includes(raw)) { input.value = ''; return; }
+  list.push(raw);
+  USER_WORDS = list;
+  saveUserWords(USER_WORDS);
+  input.value = '';
+  renderWordsList();
+}
+
+if (addWordBtn) addWordBtn.addEventListener('click', addWordFromInput);
+if (newWordInput) newWordInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    addWordFromInput();
+    e.preventDefault();
+  }
+});
+if (resetWordsBtn) resetWordsBtn.addEventListener('click', () => {
+  USER_WORDS = [];
+  saveUserWords(USER_WORDS);
+  // Re-render now shows defaults
+  renderWordsList();
+});
 
 // HUD colors and debug flags
 const CLEAR_COLOR = '#101820'; // deep navy
 const HUD_COLOR = '#eaeaea';
-const DEBUG = false; // set to true to show debug overlays
 // Separate toggle to show collision boxes at runtime (press 'H')
 let SHOW_HITBOXES = false;
+let DIFFICULTY = 'normal'; // 'easy' | 'normal'
+try {
+  const pref = localStorage.getItem('ss13_show_hitboxes');
+  SHOW_HITBOXES = pref === '1';
+  const diff = localStorage.getItem('ss13_difficulty');
+  if (diff === 'easy' || diff === 'normal') DIFFICULTY = diff;
+} catch {}
+// WebXDC: one-shot sender for gameover updates
+let gameOverUpdateSent = false;
+function sendGameOverUpdateOnce() {
+  if (gameOverUpdateSent) return;
+  gameOverUpdateSent = true;
+  try {
+    const wx = /** @type {any} */ (window).webxdc;
+    if (wx && typeof wx.sendUpdate === 'function') {
+      const payload = {
+        score,
+        best: bestScore,
+        wordsCompleted,
+        city: CITIES[cityIndex]?.name || '',
+        timeLeft: Math.round(timeLeft),
+        ts: Date.now()
+      };
+      wx.sendUpdate({ payload, info: `Street Sweeper 13: score ${score}` }, `Game over: ${score}`);
+    } else if (DEBUG) {
+      // Fallback visibility in browser/dev
+      console.log('[webxdc] Game over update', {
+        score,
+        best: bestScore,
+        wordsCompleted,
+        city: CITIES[cityIndex]?.name || '',
+        timeLeft: Math.round(timeLeft)
+      });
+    }
+  } catch (err) {
+    if (DEBUG) console.warn('webxdc sendUpdate failed:', err);
+  }
+}
 
-// Scrolling street background (pixel art)
-const streetImg = new Image();
-streetImg.src = 'assets/street.png';
-let streetLoaded = false;
-streetImg.onload = () => { streetLoaded = true; };
+// Per-city assets (foreground, street, obstacles)
+function initImage(src) {
+  const img = new Image();
+  const obj = { img, loaded: false };
+  img.onload = () => { obj.loaded = true; };
+  img.src = src;
+  return obj;
+}
+const CITY_DEFS = [
+  { key: 'marseille', name: 'Marseille', bgColor: '#4477aa' },
+  { key: 'paris', name: 'Paris', bgColor: '#888888' },
+];
+const cityAssets = CITY_DEFS.map(c => ({
+  fg: initImage(`assets/${c.key}.png`),
+  // Marseille uses existing 'street.png' in repo; others follow '<key>-street.png'
+  street: initImage(c.key === 'marseille' ? `assets/street.png` : `assets/${c.key}-street.png`),
+  obstacles: initImage(`assets/${c.key}-obstacles.png`),
+}));
+function currentCityAssets() {
+  return cityAssets[Math.max(0, Math.min(CITY_DEFS.length - 1, cityIndex))];
+}
 let streetScrollX = 0; // pixels, increasing moves background left
-
-// Foreground sidewalk/city layer (e.g., Marseille), scrolls same as street
-const marseilleImg = new Image();
-marseilleImg.src = 'assets/marseille.png';
-let marseilleLoaded = false;
-marseilleImg.onload = () => { marseilleLoaded = true; };
 
 // Lanes and player config
 const LANES = 3;
@@ -82,8 +253,136 @@ let playerImgLoaded = false;
 playerImg.onload = () => { playerImgLoaded = true; };
 
 // Game progression / HUD
-const WORDS = ["POULET", "CHAT", "BUS"]; // target words
-let targetWord = "";
+// Default training words; users can override via Settings
+const DEFAULT_WORDS = ["ODYSSÉE", "AMOUR", "INOUBLIABLE", "POISON", "LIBERTÉ", "ÉGALITÉ", "FRATERNITÉ"] ; // default target words
+let USER_WORDS = []; // loaded from storage; empty => use defaults
+const WORDS_STORAGE_KEY = 'ss13_words';
+
+function loadUserWords() {
+  try {
+    const raw = localStorage.getItem(WORDS_STORAGE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    // sanitize: strings only, uppercased, trimmed, max 12 chars (allow special characters)
+    const cleaned = arr
+      .filter(w => typeof w === 'string')
+      .map(w => (w + '').toUpperCase().trim())
+      .map(w => w.slice(0, 12))
+      .filter(w => w.length >= 1);
+    // de-duplicate while preserving order
+    const seen = new Set();
+    const unique = [];
+    for (const w of cleaned) {
+      if (!seen.has(w)) { seen.add(w); unique.push(w); }
+    }
+    return unique;
+  } catch {
+    return [];
+  }
+}
+function saveUserWords(words) {
+  try { localStorage.setItem(WORDS_STORAGE_KEY, JSON.stringify(words)); } catch {}
+}
+function getActiveWords() {
+  // If user list is empty or invalid, fall back to defaults
+  if (!USER_WORDS || USER_WORDS.length === 0) return DEFAULT_WORDS;
+  return USER_WORDS;
+}
+// No-repeat word selection: maintain a shuffled queue of valid words (display/playable)
+let WORD_QUEUE = [];
+let WORD_QUEUE_SIG = '';
+function _computeWordsSignature() {
+  // Signature based on the raw active list order/content
+  const list = getActiveWords();
+  return Array.isArray(list) ? list.join('|') : '';
+}
+function _rebuildWordQueue() {
+  // Build a list of valid pairs from active words; fallback to defaults if needed
+  const src = getActiveWords();
+  const pairs = [];
+  for (const raw of src) {
+    const display = sanitizeDisplayWord(raw);
+    const playable = normalizeWordForPlay(display);
+    if (playable.length > 0) pairs.push({ display, playable });
+  }
+  if (pairs.length === 0) {
+    for (const raw of DEFAULT_WORDS) {
+      const display = sanitizeDisplayWord(raw);
+      const playable = normalizeWordForPlay(display);
+      if (playable.length > 0) pairs.push({ display, playable });
+    }
+  }
+  // Fisher-Yates shuffle
+  for (let i = pairs.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = pairs[i];
+    pairs[i] = pairs[j];
+    pairs[j] = tmp;
+  }
+  WORD_QUEUE = pairs;
+  WORD_QUEUE_SIG = _computeWordsSignature();
+}
+function pickRandomWord() {
+  const list = getActiveWords();
+  return list[Math.floor(Math.random() * list.length)];
+}
+// Convert a raw word to its playable form (A–Z only), removing diacritics and symbols
+function normalizeWordForPlay(word) {
+  if (!word) return '';
+  let s = (word + '').toUpperCase();
+  // Expand common ligatures and special letters to ASCII sequences
+  s = s.replace(/Æ/g, 'AE').replace(/Œ/g, 'OE').replace(/[ẞß]/g, 'SS');
+  try {
+    // Remove diacritics (Unicode) then strip non A–Z
+    s = s.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+  } catch {}
+  s = s.replace(/[^A-Z]/g, '');
+  return s;
+}
+// Keep letters (Unicode) for display; expand ligatures but preserve accents; max 12
+function sanitizeDisplayWord(raw) {
+  let s = (raw + '').toUpperCase().trim();
+  // Expand ligatures for consistent length with playable
+  s = s.replace(/Æ/g, 'AE').replace(/Œ/g, 'OE').replace(/[ẞß]/g, 'SS');
+  try { s = s.normalize('NFC'); } catch {}
+  // Keep letters only (no spaces/punct)
+  s = s.replace(/[^\p{L}]/gu, '');
+  if (s.length > 12) s = s.slice(0, 12);
+  return s;
+}
+function normalizeChar(ch) {
+  return normalizeWordForPlay(ch).slice(0, 1);
+}
+function pickRandomPlayableWord() {
+  // Try a few times to find a word that yields a non-empty playable form
+  const list = getActiveWords();
+  for (let i = 0; i < Math.min(20, list.length * 2); i++) {
+    const raw = list[Math.floor(Math.random() * list.length)];
+    const playable = normalizeWordForPlay(sanitizeDisplayWord(raw));
+    if (playable.length > 0) return playable;
+  }
+  // Fallback to defaults if necessary
+  for (const raw of DEFAULT_WORDS) {
+    const playable = normalizeWordForPlay(sanitizeDisplayWord(raw));
+    if (playable.length > 0) return playable;
+  }
+  // Last resort
+  return 'MOT';
+}
+function pickRandomWordPair() {
+  const sig = _computeWordsSignature();
+  if (WORD_QUEUE.length === 0 || WORD_QUEUE_SIG !== sig) {
+    _rebuildWordQueue();
+  }
+  const pair = WORD_QUEUE.shift();
+  // Lazily rebuild next time if we just consumed the last element
+  return pair || { display: 'MOT', playable: 'MOT' };
+}
+// initialize user words from storage on load
+USER_WORDS = loadUserWords();
+let targetWord = ""; // playable (A–Z)
+let targetWordDisplay = ""; // display (accents kept)
 let currentIndex = 0; // next required letter index
 let score = 0;
 let lives = 3;
@@ -92,7 +391,7 @@ const PLAYER_FLASH_TIME = 0.2;
 // Difficulty ramp for letter speeds
 let letterSpeedMin = 60; // px/s
 let letterSpeedMax = 80; // px/s
-const SPEED_INCREMENT = 5; // per completed word
+const SPEED_INCREMENT = 6; // per completed word
 // Shared background/obstacle scroll speed (px/s), computed each frame
 let currentStreetSpeed = 0;
 
@@ -109,15 +408,10 @@ try {
   bestScore = 0;
 }
 // Time bonuses
-const WORD_COMPLETE_TIME_BONUS = 6; // seconds gained when completing a word
-const LEVEL_UP_TIME_BONUS = 10; // additional seconds gained when leveling up
+const WORD_COMPLETE_TIME_BONUS = 15; // seconds gained when completing a word
+const LEVEL_UP_TIME_BONUS = 15; // additional seconds gained when leveling up
 // Cities / levels ----------------------------------------------------------
-const CITIES = [
-  { name: 'Marseille', bgColor: '#4477aa' },
-  { name: 'Paris', bgColor: '#888888' },
-  { name: 'Tokyo', bgColor: '#aa4477' },
-  { name: 'New York', bgColor: '#ffaa44' },
-];
+const CITIES = CITY_DEFS.map(c => ({ name: c.name, bgColor: c.bgColor }));
 let cityIndex = 0; // index into CITIES
 let wordsCompleted = 0; // total words completed this run
 let levelUpTimer = 0; // seconds remaining for level-up overlay (separate from scrolling banner)
@@ -146,7 +440,9 @@ const WORD_FOCUS_TIME = 1.2; // seconds
 let wordPhase = 'none';
 let wordPhaseTimer = 0; // seconds remaining in current phase
 let lastCompletedWord = '';
+let lastCompletedDisplay = '';
 let nextWordPending = '';
+let nextWordPendingDisplay = '';
 
 /**
  * Compute the center Y for a lane index [0..LANES-1]
@@ -171,17 +467,30 @@ class Player {
     // animation state
     this.frame = 0;
     this.animTime = 0; // accumulates dt
+    // lane movement animation (bounce)
+    this.yPos = laneCenterY(this.lane); // animated vertical anchor (lane center)
+    this.moveFromY = this.yPos;
+    this.moveToY = this.yPos;
+    this.moveT = 0; // elapsed time
+    this.moveDur = 0; // duration
+    this.moveDir = 0; // -1 up, +1 down
   }
 
   reset() {
     this.lane = 1;
     this.frame = 0;
     this.animTime = 0;
+    this.yPos = laneCenterY(this.lane);
+    this.moveFromY = this.yPos;
+    this.moveToY = this.yPos;
+    this.moveT = 0;
+    this.moveDur = 0;
+    this.moveDir = 0;
   }
 
   /** Collision rectangle: bottom aligned to lane center + offset (near wheels). */
   getCollisionRect() {
-    const bottomY = laneCenterY(this.lane) + PLAYER_FOOT_OFFSET;
+    const bottomY = Math.round(this.yPos) + PLAYER_FOOT_OFFSET;
     const x = this.x;
     const y = bottomY - this.h;
     return { x, y, w: this.w, h: this.h };
@@ -190,7 +499,7 @@ class Player {
   /** Draw rectangle: bottom aligned to same lane anchor as collision, centered horizontally on hitbox. */
   getDrawRect() {
     const { x: baseX } = this.getCollisionRect();
-    const bottomY = laneCenterY(this.lane) + PLAYER_FOOT_OFFSET;
+    const bottomY = Math.round(this.yPos) + PLAYER_FOOT_OFFSET;
     const dw = PLAYER_DRAW_W;
     const dh = PLAYER_DRAW_H;
     return {
@@ -202,11 +511,28 @@ class Player {
   }
 
   moveUp() {
-    if (this.lane > 0) this.lane -= 1;
+    if (this.lane > 0) {
+      const targetLane = this.lane - 1;
+      // Start movement from current animated position to target lane
+      this.moveFromY = this.yPos;
+      this.lane = targetLane;
+      this.moveToY = laneCenterY(this.lane);
+      this.moveT = 0;
+      this.moveDur = 0.22; // seconds
+      this.moveDir = -1;
+    }
   }
 
   moveDown() {
-    if (this.lane < LANES - 1) this.lane += 1;
+    if (this.lane < LANES - 1) {
+      const targetLane = this.lane + 1;
+      this.moveFromY = this.yPos;
+      this.lane = targetLane;
+      this.moveToY = laneCenterY(this.lane);
+      this.moveT = 0;
+      this.moveDur = 0.22;
+      this.moveDir = 1;
+    }
   }
 
   update(dt) {
@@ -215,6 +541,27 @@ class Player {
     while (this.animTime >= PLAYER_FRAME_DURATION) {
       this.animTime -= PLAYER_FRAME_DURATION;
       this.frame = (this.frame + 1) % PLAYER_FRAME_COUNT;
+    }
+    // lane movement tween with a subtle directional bounce
+    if (this.moveDur > 0 && this.moveT < this.moveDur) {
+      this.moveT = Math.min(this.moveDur, this.moveT + dt);
+      const t = this.moveT / this.moveDur; // 0..1
+      // easeOutCubic
+      const ease = 1 - Math.pow(1 - t, 3);
+      // base interpolation
+      const baseY = this.moveFromY + (this.moveToY - this.moveFromY) * ease;
+      // bounce offset decays over time
+      const amp = 8; // pixels
+      const bounce = Math.sin(Math.PI * t) * (1 - t) * amp * this.moveDir;
+      this.yPos = baseY + bounce;
+      if (this.moveT >= this.moveDur) {
+        this.yPos = this.moveToY;
+        this.moveDur = 0;
+        this.moveDir = 0;
+      }
+    } else {
+      // ensure yPos stays synced when idle
+      this.yPos = laneCenterY(this.lane);
     }
   }
 
@@ -227,10 +574,27 @@ class Player {
       const sy = 0;
       const sw = PLAYER_FRAME_W;
       const sh = PLAYER_FRAME_H;
-      // Draw scaled down to 18x18 keeping pixel crispness
+      // Slight squash/stretch during movement to mimic bounce
+      let scaleY = 1;
+      if (this.moveDur > 0 && this.moveT < this.moveDur) {
+        const t = this.moveT / this.moveDur;
+        const pulse = Math.sin(Math.PI * t) * (1 - t); // 0..~0.5
+        // moving down: brief stretch (>1), moving up: brief squash (<1)
+        scaleY = 1 + (this.moveDir >= 0 ? 0.08 : -0.06) * pulse;
+      }
+      // Draw keeping bottom alignment when scaling
       const prevSmoothing = ctx.imageSmoothingEnabled;
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(playerImg, sx, sy, sw, sh, x, y, w, h);
+      if (scaleY !== 1) {
+        ctx.save();
+        // anchor at bottom-center
+        ctx.translate(Math.round(x + w / 2), Math.round(y + h));
+        ctx.scale(1, scaleY);
+        ctx.drawImage(playerImg, sx, sy, sw, sh, Math.round(-w / 2), Math.round(-h), w, h);
+        ctx.restore();
+      } else {
+        ctx.drawImage(playerImg, sx, sy, sw, sh, x, y, w, h);
+      }
       ctx.imageSmoothingEnabled = prevSmoothing;
     } else {
       // Fallback: placeholder rect until image loads
@@ -293,12 +657,7 @@ let neededSafetyTimer = 0; // ensure needed letter at least every 2s
 // Obstacles ---------------------------------------------------------------
 const OBSTACLE_TYPES = /** @type {const} */(['trash','pothole','cone']); // kept for spawn variety, not used for size
 
-// Obstacle sprite sheet (Marseille) — 5 frames, 32x32 each
-const OBST_SHEET_SRC = 'assets/marseille-obstacles.png';
-const obstacleImg = new Image();
-obstacleImg.src = OBST_SHEET_SRC;
-let obstacleImgLoaded = false;
-obstacleImg.onload = () => { obstacleImgLoaded = true; };
+// Obstacle sprite sheet (per-city) — 5 frames, 32x32 each
 const OBST_SPRITE_W = 32;
 const OBST_SPRITE_H = 32;
 const OBST_SPRITE_COUNT = 5;
@@ -335,7 +694,10 @@ class Obstacle {
     return dx + dw < 0;
   }
   draw(ctx) {
-    if (obstacleImgLoaded) {
+    const assets = currentCityAssets();
+    const obstacleImg = assets?.obstacles?.img;
+    const obstacleLoaded = assets?.obstacles?.loaded;
+    if (obstacleLoaded && obstacleImg) {
       const sx = (this.frame % OBST_SPRITE_COUNT) * OBST_SPRITE_W;
       const sy = 0;
       const sw = OBST_SPRITE_W;
@@ -386,10 +748,16 @@ function loop(ts) {
         if (wordPhaseTimer === 0) {
           if (wordPhase === 'celebrate') {
             // Switch to focus phase and reveal the new target word
-            if (!nextWordPending) nextWordPending = WORDS[Math.floor(Math.random() * WORDS.length)];
+            if (!nextWordPending) {
+              const pair = pickRandomWordPair();
+              nextWordPending = pair.playable;
+              nextWordPendingDisplay = pair.display;
+            }
             targetWord = nextWordPending;
+            targetWordDisplay = nextWordPendingDisplay;
             currentIndex = 0;
             nextWordPending = '';
+            nextWordPendingDisplay = '';
             wordPhase = 'focus';
             wordPhaseTimer = WORD_FOCUS_TIME;
           } else {
@@ -422,7 +790,7 @@ function loop(ts) {
         const availableLanes = [];
         for (let i = 0; i < LANES; i++) if (laneCounts[i] < MAX_PER_LANE) availableLanes.push(i);
 
-        const nextNeededChar = targetWord[currentIndex] || randomLetter();
+  const nextNeededChar = targetWord[currentIndex] || randomLetter();
         const mustSpawnNeeded = neededSafetyTimer >= 2;
         const spawnNeeded = mustSpawnNeeded || Math.random() < 0.6;
 
@@ -446,7 +814,9 @@ function loop(ts) {
 
         let spawnedNeeded = false;
         if (spawnNeeded) {
-          spawnedNeeded = spawnChar(nextNeededChar);
+          // Spawn the display version of the needed char when available
+          const dispCh = targetWordDisplay[currentIndex] || nextNeededChar;
+          spawnedNeeded = spawnChar(dispCh);
           if (spawnedNeeded) neededSafetyTimer = 0;
         } else {
           // main spawn is a distractor
@@ -458,26 +828,31 @@ function loop(ts) {
       }
 
       // Spawn obstacles independently (frozen during wordPhase)
-      // Scale obstacle spawn interval by level: easier early, slightly faster later (min 2.4s)
-      {
-        const level = Math.floor(wordsCompleted / 10) + 1; // 1-based level
-        const desired = Math.max(2.4, 4.0 - 0.25 * (level - 1));
-        obstacleSpawnInterval = desired;
-      }
-      if (wordPhase === 'none') obstacleSpawnTimer += dt;
-      // At most one obstacle per interval
-      if (obstacleSpawnTimer >= obstacleSpawnInterval) {
-        // Count per-lane caps for obstacles only (independent of letters)
-        const laneCounts = new Array(LANES).fill(0);
-        for (const o of obstacles) laneCounts[o.lane]++;
-        const availableLanes = [];
-        for (let i = 0; i < LANES; i++) if (laneCounts[i] < OBST_MAX_PER_LANE) availableLanes.push(i);
-        if (availableLanes.length > 0 && obstacles.length < OBST_MAX_TOTAL) {
-          const lane = availableLanes[Math.floor(Math.random() * availableLanes.length)];
-          const type = OBSTACLE_TYPES[Math.floor(Math.random() * OBSTACLE_TYPES.length)];
-          obstacles.push(new Obstacle(type, lane));
+      if (DIFFICULTY !== 'easy') {
+        // Scale obstacle spawn interval by level: easier early, slightly faster later (min 2.4s)
+        {
+          const level = Math.floor(wordsCompleted / 10) + 1; // 1-based level
+          const desired = Math.max(2.4, 4.0 - 0.25 * (level - 1));
+          obstacleSpawnInterval = desired;
         }
-        obstacleSpawnTimer -= obstacleSpawnInterval;
+        if (wordPhase === 'none') obstacleSpawnTimer += dt;
+        // At most one obstacle per interval
+        if (obstacleSpawnTimer >= obstacleSpawnInterval) {
+          // Count per-lane caps for obstacles only (independent of letters)
+          const laneCounts = new Array(LANES).fill(0);
+          for (const o of obstacles) laneCounts[o.lane]++;
+          const availableLanes = [];
+          for (let i = 0; i < LANES; i++) if (laneCounts[i] < OBST_MAX_PER_LANE) availableLanes.push(i);
+          if (availableLanes.length > 0 && obstacles.length < OBST_MAX_TOTAL) {
+            const lane = availableLanes[Math.floor(Math.random() * availableLanes.length)];
+            const type = OBSTACLE_TYPES[Math.floor(Math.random() * OBSTACLE_TYPES.length)];
+            obstacles.push(new Obstacle(type, lane));
+          }
+          obstacleSpawnTimer -= obstacleSpawnInterval;
+        }
+      } else {
+        obstacleSpawnTimer = 0;
+        if (obstacles.length) obstacles = [];
       }
   // Update and cull letters
   for (let i = 0; i < letters.length; i++) letters[i].update(dt);
@@ -505,8 +880,9 @@ function loop(ts) {
       // Compute shared street speed once per frame and use it for background and obstacles
   currentStreetSpeed = (wordPhase === 'none') ? Math.max(24, Math.min(120, letterSpeedMin * 0.6)) : 0; // px/s
       // Update street scroll with the same speed
-      if (streetLoaded || marseilleLoaded) {
-        const wrap = (streetImg.width || marseilleImg.width || 320);
+      {
+        const assets = currentCityAssets();
+        const wrap = (assets?.street?.img?.width) || 320;
         streetScrollX = (streetScrollX + currentStreetSpeed * dt) % wrap;
       }
 
@@ -523,7 +899,7 @@ function loop(ts) {
           if (l.x < px + pw && l.x + l.w > px && l.y < py + ph && l.y + l.h > py) {
             // Overlap
             const needed = targetWord[currentIndex];
-            if (l.char === needed) {
+            if (normalizeWordForPlay(l.char).charAt(0) === needed) {
               // Correct letter: collect
               score += 100;
               timeLeft = Math.min(ROUND_TIME_START, timeLeft + 2);
@@ -570,7 +946,12 @@ function loop(ts) {
                 }
                 // Start celebration/focus pause sequence
                 lastCompletedWord = targetWord;
-                nextWordPending = WORDS[Math.floor(Math.random() * WORDS.length)];
+                lastCompletedDisplay = targetWordDisplay;
+                {
+                  const pair = pickRandomWordPair();
+                  nextWordPending = pair.playable;
+                  nextWordPendingDisplay = pair.display;
+                }
                 wordPhase = 'celebrate';
                 wordPhaseTimer = WORD_CELEBRATE_TIME;
               }
@@ -617,11 +998,15 @@ function loop(ts) {
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Draw scrolling street background aligned to bottom
-  if (state === GameState.RUN && streetLoaded) {
-    const y = canvas.height - streetImg.height; // bottom align
-    const w = streetImg.width;
-    const h = streetImg.height;
+  // Draw scrolling street background aligned to bottom (per-city)
+  {
+    const assets = currentCityAssets();
+    const streetObj = assets?.street;
+    if (state === GameState.RUN && streetObj?.loaded) {
+      const streetImg = streetObj.img;
+      const y = canvas.height - streetImg.height; // bottom align
+      const w = streetImg.width;
+      const h = streetImg.height;
     const prevSmooth = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = false;
     // Start drawing from negative offset so that the image appears shifted by streetScrollX
@@ -631,21 +1016,27 @@ function loop(ts) {
       ctx.drawImage(streetImg, 0, 0, w, h, Math.round(x), y, w, h);
     }
     ctx.imageSmoothingEnabled = prevSmooth;
+    }
   }
 
-  // Draw Marseille layer above street, bottom aligned to 12px above the upper lane
-  if (state === GameState.RUN && marseilleLoaded) {
-    const bottomAnchor = laneCenterY(0) - 12; // 12px above upper lane
-    const w = marseilleImg.width;
-    const h = marseilleImg.height;
-    const y = bottomAnchor - h;
-    const prevSmooth = ctx.imageSmoothingEnabled;
-    ctx.imageSmoothingEnabled = false;
-    let startX = -streetScrollX;
-    for (let x = startX; x < canvas.width; x += w) {
-      ctx.drawImage(marseilleImg, 0, 0, w, h, Math.round(x), y, w, h);
+  // Draw city foreground layer above street, bottom aligned to 12px above the upper lane
+  {
+    const assets = currentCityAssets();
+    const fgObj = assets?.fg;
+    if (state === GameState.RUN && fgObj?.loaded) {
+      const fgImg = fgObj.img;
+      const bottomAnchor = laneCenterY(0) - 12; // 12px above upper lane
+      const w = fgImg.width;
+      const h = fgImg.height;
+      const y = bottomAnchor - h;
+      const prevSmooth = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = false;
+      let startX = -streetScrollX;
+      for (let x = startX; x < canvas.width; x += w) {
+        ctx.drawImage(fgImg, 0, 0, w, h, Math.round(x), y, w, h);
+      }
+      ctx.imageSmoothingEnabled = prevSmooth;
     }
-    ctx.imageSmoothingEnabled = prevSmooth;
   }
 
   // Debug: state label
@@ -660,7 +1051,7 @@ function loop(ts) {
 
   // HUD layout: Single-row top bar + word slots
   if (state === GameState.RUN) {
-    const margin = 6;
+    const margin = 0;
     const BAR_H = 18;
     // Top translucent bar background for contrast on light city backgrounds
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
@@ -670,7 +1061,7 @@ function loop(ts) {
     const brooms = '🧹'.repeat(lives);
     ctx.fillStyle = HUD_COLOR;
     ctx.textBaseline = 'middle';
-    ctx.font = '12px monospace';
+    ctx.font = '14px monospace';
     const yMid = Math.floor(BAR_H / 2);
     // Lives left
     ctx.textAlign = 'left';
@@ -680,8 +1071,11 @@ function loop(ts) {
     ctx.fillText(String(score), canvas.width - margin, yMid);
 
     // Word slots below the bar (no title text to save space)
-    const SLOT_W = 12, SLOT_H = 14, SLOT_GAP = 2;
-    const n = targetWord.length;
+  const SLOT_W = 12, SLOT_H = 14, SLOT_GAP = 2;
+  const n = targetWord.length;
+    // Reveal policy: show all letters on the very first word (tutorial),
+    // otherwise only show letters that have been collected.
+    const revealAllLetters = (wordsCompleted === 0);
     const totalW = n * SLOT_W + (n - 1) * SLOT_GAP;
     let sx = Math.floor((canvas.width - totalW) / 2);
     const sy = BAR_H + 4;
@@ -693,7 +1087,10 @@ function loop(ts) {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = 'bold 11px monospace';
-      ctx.fillText(targetWord[i] || '', sx + SLOT_W / 2, sy + SLOT_H / 2 + 0.5);
+      // Show display character in UI if collected, or if we're on the first word (tutorial).
+      const showChar = revealAllLetters || collected;
+      const dispCh = showChar ? (targetWordDisplay[i] || targetWord[i] || '') : '';
+      ctx.fillText(dispCh, sx + SLOT_W / 2, sy + SLOT_H / 2 + 0.5);
       sx += SLOT_W + SLOT_GAP;
     }
   }
@@ -861,9 +1258,10 @@ function loop(ts) {
       ctx.save();
       ctx.translate(canvas.width/2, canvas.height/2 - 6);
       ctx.scale(scale, scale);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 24px monospace';
-      ctx.fillText(`${lastCompletedWord} 👍!`, 0, 0);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 24px monospace';
+  const show = lastCompletedDisplay || lastCompletedWord;
+  ctx.fillText(`${show} 👍!`, 0, 0);
       ctx.restore();
       // Bonus hint below
       ctx.fillStyle = '#ffd400';
@@ -872,11 +1270,12 @@ function loop(ts) {
     } else if (wordPhase === 'focus') {
       // Focus on the new word: show target with an underline animation
       const t = (WORD_FOCUS_TIME - wordPhaseTimer);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 20px monospace';
-      ctx.fillText(`🆕♻️ ${targetWord} ♻️🆕`, canvas.width/2, canvas.height/2);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 20px monospace';
+  const show = targetWordDisplay || targetWord;
+  ctx.fillText(`🆕♻️ ${show} ♻️🆕`, canvas.width/2, canvas.height/2);
       // Underline grows from center
-      const total = Math.min(canvas.width - 40, 12 * targetWord.length + 8);
+  const total = Math.min(canvas.width - 40, 12 * targetWord.length + 8);
       const half = (total / 2) * Math.min(1, t / WORD_FOCUS_TIME);
       const y = canvas.height/2 + 6;
       ctx.strokeStyle = '#ffffff';
@@ -929,9 +1328,64 @@ canvas.addEventListener('pointerdown', (e) => {
 window.addEventListener('keydown', (e) => {
   if (state !== GameState.RUN) return;
   if (e.key === 'o' || e.key === 'O') {
+    if (DIFFICULTY === 'easy') return; // disabled in EASY mode
     const lane = Math.floor(Math.random() * LANES);
     const type = OBSTACLE_TYPES[Math.floor(Math.random() * OBSTACLE_TYPES.length)];
     obstacles.push(new Obstacle(type, lane));
+  }
+});
+
+// Debug: complete the current word with key 'L'
+window.addEventListener('keydown', (e) => {
+  if (!DEBUG) return;
+  if (state !== GameState.RUN || wordPhase !== 'none') return;
+  if (e.key === 'l' || e.key === 'L') {
+    // Simulate that the final needed letter was collected
+    if (!targetWord || currentIndex >= targetWord.length) return;
+    // Award last letter collection if at least one letter remains
+    const remaining = targetWord.length - currentIndex;
+    if (remaining > 0) {
+      // For UX parity, only give the word completion bonus here; individual +100/+2s floaters for each missing letter are skipped.
+      score += 500;
+      timeLeft = Math.min(ROUND_TIME_START, timeLeft + WORD_COMPLETE_TIME_BONUS);
+      if (player) {
+        const { x: px, y: py, w: pw } = player.getCollisionRect();
+        addFloater(`+${WORD_COMPLETE_TIME_BONUS}s`, px + pw + 4, py + 20, '#00ffcc');
+      }
+      // Difficulty bumps as on normal completion
+      letterSpeedMin += SPEED_INCREMENT;
+      letterSpeedMax += SPEED_INCREMENT;
+      wordsCompleted += 1;
+      // Handle level-up every 10 words
+      if (wordsCompleted % 10 === 0) {
+        cityIndex = (cityIndex + 1) % CITIES.length;
+        letterSpeedMin += SPEED_INCREMENT;
+        letterSpeedMax += SPEED_INCREMENT;
+        spawnInterval = Math.max(0.8, +(spawnInterval - 0.1).toFixed(2));
+        spawnTimer = 0;
+        neededSafetyTimer = 0;
+        obstacleSpawnTimer = 0;
+        levelUpTimer = 2.0;
+        timeLeft = Math.min(ROUND_TIME_START, timeLeft + LEVEL_UP_TIME_BONUS);
+        if (player) {
+          const { x: px, y: py, w: pw } = player.getCollisionRect();
+          addFloater(`+${LEVEL_UP_TIME_BONUS}s`, px + pw + 4, py + 30, '#ffd400');
+        }
+        triggerLevelBanner();
+      } else {
+        triggerLevelBanner();
+      }
+      // Queue next word and start celebration/focus pause
+      lastCompletedWord = targetWord;
+      lastCompletedDisplay = targetWordDisplay;
+      const pair = pickRandomWordPair();
+      nextWordPending = pair.playable;
+      nextWordPendingDisplay = pair.display;
+      wordPhase = 'celebrate';
+      wordPhaseTimer = WORD_CELEBRATE_TIME;
+      currentIndex = targetWord.length; // mark as fully collected for HUD
+      e.preventDefault();
+    }
   }
 });
 
@@ -953,7 +1407,13 @@ function _setStateWrapper(next) {
     score = 0;
     lives = 3;
     currentIndex = 0;
-    targetWord = WORDS[Math.floor(Math.random() * WORDS.length)];
+    // Start a fresh no-repeat rotation of words for this run
+    _rebuildWordQueue();
+    {
+      const pair = pickRandomWordPair();
+      targetWord = pair.playable;
+      targetWordDisplay = pair.display;
+    }
     playerFlashTimer = 0;
     // Reset difficulty for new run
     letterSpeedMin = 60;
@@ -968,6 +1428,13 @@ function _setStateWrapper(next) {
     // Trigger banner for level start
     levelBanner = null;
     triggerLevelBanner();
+  // Allow next game-over update to be sent for this run
+  gameOverUpdateSent = false;
+    // Apply difficulty-specific resets
+    if (DIFFICULTY === 'easy') {
+      obstacles = [];
+      obstacleSpawnTimer = 0;
+    }
   }
   if (next === GameState.OVER) {
     // Update best score persistence
@@ -977,26 +1444,74 @@ function _setStateWrapper(next) {
     }
     if (overFinal) overFinal.textContent = `Score: ${score}`;
     if (overBest) overBest.textContent = `Best: ${bestScore}`;
+    // Publish a webxdc event (if available)
+    sendGameOverUpdateOnce();
   }
 }
 // Replace exported setState and event handlers to use wrapper
 window.setState = _setStateWrapper;
 // Re-wire buttons to wrapper for consistency
 startBtn.replaceWith(startBtn.cloneNode(true));
-restartBtn.replaceWith(restartBtn.cloneNode(true));
+if (settingsBtn) settingsBtn.replaceWith(settingsBtn.cloneNode(true));
 backBtn.replaceWith(backBtn.cloneNode(true));
+if (settingsBackBtn) settingsBackBtn.replaceWith(settingsBackBtn.cloneNode(true));
+if (diffEasy) diffEasy.replaceWith(diffEasy.cloneNode(true));
+if (diffNormal) diffNormal.replaceWith(diffNormal.cloneNode(true));
+if (wordsListEl) wordsListEl.replaceWith(wordsListEl.cloneNode(true));
+if (newWordInput) newWordInput.replaceWith(newWordInput.cloneNode(true));
+if (addWordBtn) addWordBtn.replaceWith(addWordBtn.cloneNode(true));
+if (resetWordsBtn) resetWordsBtn.replaceWith(resetWordsBtn.cloneNode(true));
 // Re-query and attach listeners again
 const _startBtn = document.getElementById('start-btn');
-const _restartBtn = document.getElementById('restart-btn');
+const _settingsBtn = document.getElementById('settings-btn');
 const _backBtn = document.getElementById('back-btn');
+const _settingsBackBtn = document.getElementById('settings-back-btn');
+const _diffEasy = document.getElementById('diff-easy');
+const _diffNormal = document.getElementById('diff-normal');
+const _wordsListEl = document.getElementById('words-list');
+const _newWordInput = document.getElementById('new-word');
+const _addWordBtn = document.getElementById('add-word-btn');
+const _resetWordsBtn = document.getElementById('reset-words-btn');
 _startBtn.addEventListener('click', () => _setStateWrapper(GameState.RUN));
-_restartBtn.addEventListener('click', () => _setStateWrapper(GameState.RUN));
+if (_settingsBtn) _settingsBtn.addEventListener('click', () => {
+  startScreen.classList.add('hidden');
+  gameScreen.classList.add('hidden');
+  overScreen.classList.add('hidden');
+  if (settingsScreen) settingsScreen.classList.remove('hidden');
+  if (_diffEasy) _diffEasy.checked = (DIFFICULTY === 'easy');
+  if (_diffNormal) _diffNormal.checked = (DIFFICULTY === 'normal');
+  // Render words using potentially re-queried element
+  renderWordsList();
+});
 _backBtn.addEventListener('click', () => _setStateWrapper(GameState.START));
+if (_settingsBackBtn) _settingsBackBtn.addEventListener('click', () => _setStateWrapper(GameState.START));
+if (_diffEasy) _diffEasy.addEventListener('change', (e) => {
+  if (/** @type {HTMLInputElement} */(e.target).checked) applyDifficulty('easy');
+});
+if (_diffNormal) _diffNormal.addEventListener('change', (e) => {
+  if (/** @type {HTMLInputElement} */(e.target).checked) applyDifficulty('normal');
+});
+
+// Rewire training words handlers to new nodes
+if (_addWordBtn) _addWordBtn.addEventListener('click', addWordFromInput);
+if (_newWordInput) _newWordInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    addWordFromInput();
+    e.preventDefault();
+  }
+});
+if (_resetWordsBtn) _resetWordsBtn.addEventListener('click', () => {
+  USER_WORDS = [];
+  saveUserWords(USER_WORDS);
+  renderWordsList();
+});
 
 // Global debug hotkey: toggle collision boxes with 'H'
 window.addEventListener('keydown', (e) => {
+  if (!DEBUG) return;
   if (e.key === 'h' || e.key === 'H') {
     SHOW_HITBOXES = !SHOW_HITBOXES;
+    try { localStorage.setItem('ss13_show_hitboxes', SHOW_HITBOXES ? '1' : '0'); } catch {}
     e.preventDefault();
   }
 });

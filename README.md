@@ -22,6 +22,7 @@ Road art is taken from Dylan Macgillavry on [Art Station](https://www.artstation
 - **Controls**: 
   - Arrow Up/Down: Move between 3 lanes
   - Touch: Tap top/bottom half of screen to move
+  - H: Toggle collision boxes overlay (debug)
 - **Scoring**: +100 per correct letter, +500 per completed word
 - **Hazards**: Wrong letters and obstacles cost lives and time
 
@@ -31,6 +32,7 @@ Road art is taken from Dylan Macgillavry on [Art Station](https://www.artstation
 - Level progression through different cities (every 10 words)
 - Increasing difficulty as you advance
 - Best score tracking
+ - Settings: EASY/NORMAL and custom Training words
 
 ## Files
 - `index.html` — Game UI and canvas
@@ -64,8 +66,20 @@ zip -9r street-sweeper-13.xdc index.html styles.css main.js manifest.toml
 
 Share the `.xdc` file in any WebXDC-compatible chat app.
 
+## Settings
+
+- Difficulty
+  - `NORMAL`: Full experience with obstacles.
+  - `EASY`: No obstacles spawn (and the debug `O` key is disabled). This is intended for practice.
+- Training words
+  - You can add your own words from A–Z (French uppercase is fine without accents); non-letters are stripped automatically.
+  - Words are uppercased, limited to 12 letters max, and duplicates are ignored.
+  - Removing the last remaining word is not allowed to prevent an empty list.
+  - Use the Reset button to restore the default set.
+  - Your custom list is saved locally (browser `localStorage`).
+
 ## Debug Mode
-Set `DEBUG = true` at the top of `main.js` to see entity counts and collision boxes.
+Set `DEBUG = true` at the top of `main.js` to see extra overlays. You can toggle the collision boxes at any time with the `H` key.
 
 ## Troubleshooting (Android/Chrome)
 - If the start/credits buttons appear unstyled at the top or don't respond, avoid opening the files directly with `file://` on mobile. Serve the folder over HTTP (see above) to ensure CSS/JS load correctly.

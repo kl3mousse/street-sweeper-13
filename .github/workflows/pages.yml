@@ -30,7 +30,7 @@ jobs:
           cp index.html styles.css main.js manifest.toml icon.png credits.html dist/
           cp -R assets dist/assets
           cd dist
-          zip -9r street-sweeper-13.xdc index.html styles.css main.js manifest.toml icon.png credits.html assets
+          zip -9r street-sweeper-13.xdc index.html styles.css main.js manifest.toml icon.png credits.html LICENCE README.md assets
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

@@ -18,7 +18,8 @@
         <img id="start-art" src="assets/game-start-screen.png" alt="Street Sweeper 13 title art" />
         <div class="pixel-menu" role="group" aria-label="Main menu">
           <button id="start-btn" class="pixel-btn primary" aria-label="Start Game" title="Start Game">START</button>
-          <a id="credits-btn" class="pixel-btn" aria-label="Credits" title="Credits" href="credits.html">CREDITS</a>
+          <button id="settings-btn" class="pixel-btn square" type="button" aria-label="Settings" title="Settings">⛯</button>
+          <a id="credits-btn" class="pixel-btn square" aria-label="Credits" title="Credits" href="credits.html">?</a>
         </div>
       </section>
 
@@ -29,12 +30,39 @@
 
       <!-- Game Over Screen -->
       <section id="over-screen" class="screen hidden">
-        <h2>Game Over</h2>
+        <img id="over-art" src="assets/gameover.png" alt="Game Over" />
         <p id="over-final" style="margin:4px 0 0;">Score: 0</p>
         <p id="over-best" style="margin:0 0 12px; color: var(--muted);">Best: 0</p>
         <div class="actions">
-          <button id="restart-btn" class="btn primary">Restart</button>
-          <button id="back-btn" class="btn">Back to Start</button>
+          <button id="back-btn" class="pixel-btn primary">Back to Start</button>
+        </div>
+      </section>
+
+      <!-- Settings Screen -->
+      <section id="settings-screen" class="screen hidden" aria-labelledby="settings-title">
+        <img id="settings-title" src="assets/settings.png" alt="Settings" />
+        <div class="settings-list" style="display:grid;gap:10px;justify-items:center;margin:12px 0 16px;">
+          <div style="display:flex;align-items:center;gap:10px;font:14px monospace;">
+            <label style="display:flex;align-items:center;gap:6px;">
+              <input type="radio" name="difficulty" id="diff-easy" value="easy" /> EASY
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;">
+              <input type="radio" name="difficulty" id="diff-normal" value="normal" /> NORMAL
+            </label>
+          </div>
+          
+          <div style="height:6px;"></div>
+          <div style="display:grid;gap:8px;justify-items:center;">
+            <div id="words-list" style="display:flex;flex-wrap:wrap;gap:6px;max-width:620px;justify-content:center;"></div>
+            <div style="display:flex;gap:8px;align-items:center;justify-content:center;">
+              <input id="new-word" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters" placeholder="A-z • max 12" style="padding:10px 12px;border-radius:8px;border:1px solid #2c3642;background:#0d131a;color:#eaeaea;font:14px monospace;width:200px;" />
+              <button id="add-word-btn" class="pixel-btn">+</button>
+              <button id="reset-words-btn" class="pixel-btn">↺</button>
+            </div>
+          </div>
+        </div>
+        <div class="actions" style="display:flex;justify-content:center;gap:8px;">
+          <button id="settings-back-btn" class="pixel-btn">OK</button>
         </div>
       </section>
     </div>

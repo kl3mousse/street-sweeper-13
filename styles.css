@@ -23,11 +23,11 @@ body {
 .app {
   width: 100%;
   max-width: 720px;
-  padding: 16px;
+  padding: 0px;
 }
 
 .screen { text-align: center; }
-.hidden { display: none; }
+.hidden { display: none !important; }
 
 h1, h2 { margin: 8px 0 12px; }
 p { margin: 0 0 16px; color: var(--muted); }
@@ -48,9 +48,9 @@ p { margin: 0 0 16px; color: var(--muted); }
   top: 0;
   left: 50%;
   transform: translateX(-50%); /* center the 100vw image inside narrower container */
-  width: 90vw;
-  height: 95vh;
-  height: 95svh; /* modern mobile vh */
+  width: 85vw;
+  height: 90vh;
+  height: 90svh; /* modern mobile vh */
   object-fit: contain; /* preserve ratio, show full image */
   object-position: center; 
   image-rendering: pixelated;
@@ -107,6 +107,7 @@ p { margin: 0 0 16px; color: var(--muted); }
   border: none;
   background: #1e2936;
   color: #eaeaea;
+  text-decoration: none; /* ensure anchor buttons are not underlined */
   font-family: 'Press Start 2P', monospace, system-ui;
   font-size: 18px; /* 1.5x */
   letter-spacing: 1px;
@@ -125,6 +126,10 @@ p { margin: 0 0 16px; color: var(--muted); }
     0 6px 0 0 #0d1218,
     0 6px 0 2px #000;
 }
+.pixel-btn:visited,
+.pixel-btn:hover,
+.pixel-btn:focus,
+.pixel-btn:active { text-decoration: none; }
 .pixel-btn.primary { background: #0f6a52; }
 .pixel-btn.primary:hover { background: #128061; }
 .pixel-btn:hover { filter: brightness(1.08); }
@@ -135,6 +140,21 @@ p { margin: 0 0 16px; color: var(--muted); }
     0 0 0 1px #2c3642,
     0 3px 0 0 #0d1218,
     0 3px 0 2px #000;
+}
+
+/* Square icon-style buttons (credits/settings) */
+.pixel-btn.square {
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
+}
+
+@media (max-width: 480px) {
+  .pixel-btn.square { width: 48px; height: 48px; }
 }
 
 /* Remove transform scaling; using real size increases above */
@@ -226,4 +246,24 @@ canvas#game {
     width: 96vw;
     height: calc(96vw * (180 / 320));
   }
+}
+
+/* Game Over art */
+#over-art {
+  display: block;
+  width: 256px;
+  height: 256px;
+  margin: 8px auto 6px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Settings title art */
+#settings-title {
+  display: block;
+  width: 256px;
+  height: 128px;
+  margin: 10px auto 4px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
