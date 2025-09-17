@@ -616,6 +616,36 @@ function randomLetterExcluding(exclude) {
   return String.fromCharCode(code);
 }
 
+// Confusable French spelling groups (single letters or digraphs/trigraphs).
+// These are used to bias distractor spawns toward realistic mistakes rather than pure randomness.
+// NOTE: We keep this lightweight; it can be extended later without changing logic.
+const CONFUSABLE_GROUPS = {
+  'O': ['AU', 'EAU'],
+  'AU': ['O', 'EAU'],
+  'EAU': ['O', 'AU'],
+  'L': ['LL'],
+  'S': ['T', 'C', 'SS'],
+  'C': ['S', 'Ç', 'K', 'QU'],
+  'G': ['J'],
+  'F': ['PH'],
+  'AN': ['EN', 'ON'],
+  'É': ['ER', 'EZ', 'AIT', 'AIS'],
+  // Future additions: {'A': ['À','Â']} etc.
+};
+
+/** Pick a confusable alternative for the provided character (or digraph) if available.
+ * Falls back to a random different single letter when no mapping exists.
+ * @param {string} ch
+ */
+function pickConfusable(ch) {
+  const key = (ch || '').toUpperCase();
+  if (CONFUSABLE_GROUPS[key]) {
+    const opts = CONFUSABLE_GROUPS[key];
+    return opts[Math.floor(Math.random() * opts.length)];
+  }
+  return randomLetterExcluding(key.charAt(0));
+}
+
 class Letter {
   constructor(char = randomLetter(), lane = randomInt(0, LANES - 1)) {
     this.char = char;
@@ -791,8 +821,9 @@ function loop(ts) {
         for (let i = 0; i < LANES; i++) if (laneCounts[i] < MAX_PER_LANE) availableLanes.push(i);
 
   const nextNeededChar = targetWord[currentIndex] || randomLetter();
-        const mustSpawnNeeded = neededSafetyTimer >= 2;
-        const spawnNeeded = mustSpawnNeeded || Math.random() < 0.6;
+  const mustSpawnNeeded = neededSafetyTimer >= 2;
+  // 60–70% overall chance to spawn the needed letter (choose midpoint 65%).
+  const spawnNeeded = mustSpawnNeeded || Math.random() < 0.65;
 
         function chooseLane(avail) {
           if (avail.length === 0) return -1;
@@ -819,8 +850,15 @@ function loop(ts) {
           spawnedNeeded = spawnChar(dispCh);
           if (spawnedNeeded) neededSafetyTimer = 0;
         } else {
-          // main spawn is a distractor
-          const distractor = randomLetterExcluding(nextNeededChar);
+          // Spawn a distractor: bias toward confusable forms (overall 20–30% confusable, 10–20% random)
+          // Given spawnNeeded uses 65%, we allocate ~70% of the remaining 35% to confusables => 24.5% confusable overall.
+          let distractor;
+          const roll = Math.random();
+            if (roll < 0.7) {
+              distractor = pickConfusable(nextNeededChar);
+            } else {
+              distractor = randomLetterExcluding(nextNeededChar);
+            }
           spawnChar(distractor);
         }
 
@@ -899,7 +937,10 @@ function loop(ts) {
           if (l.x < px + pw && l.x + l.w > px && l.y < py + ph && l.y + l.h > py) {
             // Overlap
             const needed = targetWord[currentIndex];
-            if (normalizeWordForPlay(l.char).charAt(0) === needed) {
+            // Correctness check: only accept if the needed letter matches the first normalized character.
+            // Multi-letter confusables (e.g. 'AU') should not grant progression unless they resolve to exactly the needed letter as a single unit.
+            const normCollected = normalizeWordForPlay(l.char);
+            if (normCollected.length === 1 && normCollected.charAt(0) === needed) {
               // Correct letter: collect
               score += 100;
               timeLeft = Math.min(ROUND_TIME_START, timeLeft + 2);

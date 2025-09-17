@@ -5,7 +5,12 @@
   --accent: #00d18f;
   --btn: #1b222b;
   --btn-hover: #2a3542;
+  /* Vertical offset for start screen buttons & menu (distance from bottom). Tweak this to move them up/down. */
+  --start-menu-bottom: clamp(70px, 15vh, 80px);
+  /* Portrait-specific offset (often needs to be higher due to bottom browser chrome). */
+  --start-menu-bottom-portrait: 100px;
 }
+
 
 * { box-sizing: border-box; }
 html, body {
@@ -66,7 +71,8 @@ p { margin: 0 0 16px; color: var(--muted); }
 #start-screen .btn.primary {
   position: absolute;
   left: 50%;
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  /* Uses custom property so you can easily tune */
+  bottom: calc(var(--start-menu-bottom) + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   z-index: 1; /* above the art */
   /* Green, prominent circular play button */
@@ -91,11 +97,12 @@ p { margin: 0 0 16px; color: var(--muted); }
 .pixel-menu {
   position: absolute;
   left: 50%;
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  /* Match raised offset used for primary button via variable */
+  bottom: calc(var(--start-menu-bottom) + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   z-index: 2;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap; /* keep on one line by default */
   justify-content: center;
   gap: 16px;
 }
@@ -108,7 +115,8 @@ p { margin: 0 0 16px; color: var(--muted); }
   background: #1e2936;
   color: #eaeaea;
   text-decoration: none; /* ensure anchor buttons are not underlined */
-  font-family: 'Press Start 2P', monospace, system-ui;
+  /* Removed custom 'Press Start 2P' font; rely on monospace fallback for a retro feel */
+  font-family: monospace, system-ui;
   font-size: 18px; /* 1.5x */
   letter-spacing: 1px;
   padding: 15px 21px; /* 1.5x */
@@ -172,14 +180,33 @@ p { margin: 0 0 16px; color: var(--muted); }
     transform: none;
     width: min(100vw, 720px);
     height: auto;
-    max-height: 72vh;
+    /* Reduce max-height slightly so the buttons sit higher */
+    max-height: 68vh;
   }
   .pixel-menu {
-    position: static;
-    transform: none;
-    margin-top: 16px;
-    gap: 20px;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(var(--start-menu-bottom-portrait) + env(safe-area-inset-bottom, 0px));
+    gap: 18px;
+    flex-wrap: nowrap; /* force single row in portrait */
   }
+}
+
+/* Ultra-narrow devices: gently compress buttons to avoid wrapping */
+@media (orientation: portrait) and (max-width: 430px) {
+  .pixel-btn {
+    padding: 12px 16px;
+    font-size: 16px; /* slightly smaller */
+  }
+  .pixel-btn.square { width: 46px; height: 46px; }
+  .pixel-menu { gap: 12px; }
+}
+
+@media (orientation: portrait) and (max-width: 360px) {
+  .pixel-btn { padding: 10px 14px; font-size: 15px; }
+  .pixel-btn.square { width: 44px; height: 44px; }
+  .pixel-menu { gap: 10px; }
 }
 
 /* Landscape: keep bottom-centered floating menu, but nudge above bottom for comfort */
