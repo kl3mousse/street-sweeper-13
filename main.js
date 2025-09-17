@@ -1,6 +1,6 @@
 // Street Sweeper 13 - minimal game loop and state machine
 
-const DEBUG = true; // set to true to show debug overlays and allow H & L keys in game
+const DEBUG = false; // set to true to show debug overlays and allow H & L keys in game
 
 /** @enum {number} */
 const GameState = {
