@@ -1,6 +1,6 @@
 // Street Sweeper 13 - minimal game loop and state machine
 
-const DEBUG = false; // set to true to show debug overlays and allow H & L keys in game
+const DEBUG = true; // set to true to show debug overlays and allow H & L keys in game
 
 /** @enum {number} */
 const GameState = {
@@ -444,6 +444,22 @@ let lastCompletedDisplay = '';
 let nextWordPending = '';
 let nextWordPendingDisplay = '';
 
+// Death / game-over transition (smooth UX instead of instant screen swap)
+const DEATH_SEQUENCE_DURATION = 1.2; // seconds for fade/animation
+let deathSequenceActive = false;
+let deathSequenceTimer = 0; // counts down
+let deathStartedAtScore = 0; // snapshot for overlay
+function startDeathSequence() {
+  if (deathSequenceActive) return; // already in progress
+  deathSequenceActive = true;
+  deathSequenceTimer = DEATH_SEQUENCE_DURATION;
+  deathStartedAtScore = score;
+  // Ensure lives are clamped to 0
+  lives = 0;
+  // Small flash to indicate hit
+  playerFlashTimer = PLAYER_FLASH_TIME;
+}
+
 /**
  * Compute the center Y for a lane index [0..LANES-1]
  * Evenly spaces lanes across the canvas height (centers at 1/(L+1), ..., L/(L+1)).
@@ -618,19 +634,51 @@ function randomLetterExcluding(exclude) {
 
 // Confusable French spelling groups (single letters or digraphs/trigraphs).
 // These are used to bias distractor spawns toward realistic mistakes rather than pure randomness.
-// NOTE: We keep this lightweight; it can be extended later without changing logic.
 const CONFUSABLE_GROUPS = {
-  'O': ['AU', 'EAU'],
-  'AU': ['O', 'EAU'],
-  'EAU': ['O', 'AU'],
-  'L': ['LL'],
-  'S': ['T', 'C', 'SS'],
-  'C': ['S', 'Ç', 'K', 'QU'],
-  'G': ['J'],
-  'F': ['PH'],
-  'AN': ['EN', 'ON'],
-  'É': ['ER', 'EZ', 'AIT', 'AIS'],
-  // Future additions: {'A': ['À','Â']} etc.
+  // Voyelles simples vs digrammes/trigrammes
+  "O": ["AU", "EAU"],
+  "AU": ["O", "EAU"],
+  "EAU": ["O", "AU"],
+
+  "A": ["À", "Â"], // accents often dropped
+  "E": ["É", "È", "Ê", "AI", "ER"],
+  "É": ["ER", "EZ", "AIT", "AIS"],
+  "AI": ["É", "È", "ER"],
+  "U": ["Û", "OU"],
+
+  // Nasales
+  "AN": ["EN", "ON", "AM"],
+  "EN": ["AN", "ON", "EM"],
+  "ON": ["AN", "EN"],
+
+  // Consonnes simples vs doubles
+  "L": ["LL"],
+  "N": ["NN"],
+  "M": ["MM"],
+  "T": ["TT"],
+  "R": ["RR"],
+  "S": ["SS"],
+
+  // Consonnes proches
+  "C": ["S", "Ç", "SS", "K", "QU"],
+  "Ç": ["S", "C"],
+  "K": ["C", "QU"],
+  "QU": ["C", "K"],
+
+  "G": ["J"],
+  "J": ["G"],
+  "S": ["Z", "C"],
+  "Z": ["S"],
+
+  "F": ["PH"],
+  "PH": ["F"],
+
+  // Fins de mots muettes
+  "D": ["T"],      // e.g. grand vs. grant
+  "P": ["B"],      // confusion fréquente à l’oral
+  "X": ["S"],      // pluriels
+  "S": ["X"],      // idem
+  "E": [""]        // omission du -e final muet
 };
 
 /** Pick a confusable alternative for the provided character (or digraph) if available.
@@ -800,10 +848,9 @@ function loop(ts) {
       }
       // Timer (frozen during wordPhase)
       if (wordPhase === 'none') timeLeft -= dt;
-      if (timeLeft <= 0) {
+      if (timeLeft <= 0 && !deathSequenceActive) {
         timeLeft = 0;
-        _setStateWrapper(GameState.OVER);
-        break;
+        startDeathSequence();
       }
       // Level-up banner timer
       if (levelUpTimer > 0) levelUpTimer = Math.max(0, levelUpTimer - dt);
@@ -1005,7 +1052,7 @@ function loop(ts) {
               addFloater('-2s', px + pw + 4, py + 10, '#ff6666');
               letters.splice(i, 1);
               if (lives <= 0) {
-                _setStateWrapper(GameState.OVER);
+                startDeathSequence();
                 break;
               }
             }
@@ -1022,7 +1069,7 @@ function loop(ts) {
             addFloater('-2s', px + pw + 4, py + 10, '#ff6666');
             obstacles.splice(i, 1);
             if (lives <= 0) {
-              _setStateWrapper(GameState.OVER);
+              startDeathSequence();
               break;
             }
           }
@@ -1032,6 +1079,18 @@ function loop(ts) {
     case GameState.OVER:
       // No updates on game over
       break;
+  }
+
+  // Death sequence update (runs while still technically in RUN state until fade completes)
+  if (state === GameState.RUN && deathSequenceActive) {
+    deathSequenceTimer = Math.max(0, deathSequenceTimer - dt);
+    // Slight slow-motion effect for remaining entities (optional): we already froze spawns; we can gently drift background.
+    // Reduce spawning & gameplay interactions implicitly by skipping collision logic once lives hit 0 (handled above).
+    if (deathSequenceTimer === 0) {
+      // Transition to actual OVER state now
+      deathSequenceActive = false; // reset flag before switching
+      _setStateWrapper(GameState.OVER);
+    }
   }
 
   // Render - clear canvas each frame
@@ -1183,7 +1242,7 @@ function loop(ts) {
   // Lane guides removed for cleaner visuals
 
   // Draw letters first, then obstacles so obstacles appear on top
-  if (state === GameState.RUN && wordPhase === 'none') {
+  if (state === GameState.RUN && wordPhase === 'none' && !deathSequenceActive) {
     for (let i = 0; i < letters.length; i++) letters[i].draw(ctx);
     // ensure full opacity for obstacles
     ctx.globalAlpha = 1;
@@ -1326,6 +1385,30 @@ function loop(ts) {
       ctx.lineTo(canvas.width/2 + half, y);
       ctx.stroke();
     }
+  }
+
+  // Death sequence overlay (after normal gameplay & word overlays, but before requestAnimationFrame)
+  if (state === GameState.RUN && deathSequenceActive) {
+    const progress = 1 - (deathSequenceTimer / DEATH_SEQUENCE_DURATION); // 0->1
+    // Ease for fade (easeOutQuad)
+    const fade = 1 - (1 - progress) * (1 - progress);
+    const alpha = Math.min(0.85, fade * 0.9);
+    ctx.fillStyle = `rgba(0,0,0,${alpha.toFixed(3)})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Scale & fade-in "Game Over" text (but we only truly switch state after sequence ends)
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2 - 4);
+    const scale = 0.8 + 0.4 * fade; // grow slightly
+    ctx.scale(scale, scale);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 24px monospace';
+    ctx.fillText('GAME OVER', 0, 0);
+    ctx.font = '12px monospace';
+    ctx.fillStyle = '#ffd400';
+    ctx.fillText(`Score: ${deathStartedAtScore}`, 0, 20);
+    ctx.restore();
   }
 
   requestAnimationFrame(loop);
