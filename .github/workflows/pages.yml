@@ -21,23 +21,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Build static site and package .xdc
+      - name: Build webxdc bundle
         run: |
           chmod +x scripts/build-xdc.sh
-          # Use package.json version for deterministic filename
           npm run build:xdc:version
-          # Also extract unzipped site for Pages hosting (contents of src)
-          rsync -a src/ dist/site/ --exclude assets --exclude manifest.toml || true
-          # Keep assets and docs already in dist from build script
-          ls -1 dist
+          ls -1 dist || true
+
+      - name: Prepare static site (from src)
+        run: |
+          # Create clean site directory separate from dist artifacts
+          rm -rf site
+          mkdir -p site
+          # Copy everything needed for the browser version except webxdc-specific manifest
+          rsync -a src/ site/ --exclude manifest.toml
+          # Safety: ensure index exists
+          test -f site/index.html
+          echo "Site contents:" && find site -maxdepth 2 -type f | head -40
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          # Only publish the static site folder to Pages
+          path: site
 
   deploy:
     environment:
