@@ -93,6 +93,7 @@ function applyLanguage(idx) {
   if (!I18N.LANGS.length) return;
   currentLangIndex = (idx + I18N.LANGS.length) % I18N.LANGS.length;
   const lang = I18N.LANGS[currentLangIndex];
+  if (typeof window !== 'undefined') { window.SS13_lang = lang.code; }
   try { localStorage.setItem(LANG_KEY, lang.code); } catch {}
   // Always query current live start button (original may have been replaced by cloning logic later in file)
   const liveStartBtn = document.getElementById('start-btn');
@@ -108,6 +109,49 @@ function applyLanguage(idx) {
     const x = (lang.tile.c - 1) * -TILE_SIZE;
     const y = (lang.tile.r - 1) * -TILE_SIZE;
     langFlagEl.style.backgroundPosition = `${x}px ${y}px`;
+  }
+  // Localize game over UI if present
+  const overFinalEl = document.getElementById('over-final');
+  const overBestEl = document.getElementById('over-best');
+  const backBtnEl = document.getElementById('back-btn');
+  if (overFinalEl && overFinalEl.textContent) {
+    // Try to parse existing numeric portion to keep live score if already shown
+    const numMatch = overFinalEl.textContent.match(/(\d+)/);
+    const currentScore = numMatch ? Number(numMatch[1]) : null;
+    const scoreLabel = I18N.getString('game_over_score_label', lang.code) || 'Score';
+    if (currentScore !== null) overFinalEl.textContent = `${scoreLabel}: ${currentScore}`; else overFinalEl.textContent = scoreLabel + ':';
+  }
+  if (overBestEl && overBestEl.textContent) {
+    const numMatch = overBestEl.textContent.match(/(\d+)/);
+    const currentBest = numMatch ? Number(numMatch[1]) : null;
+    const bestLabel = I18N.getString('game_over_best_label', lang.code) || 'Best';
+    if (currentBest !== null) overBestEl.textContent = `${bestLabel}: ${currentBest}`; else overBestEl.textContent = bestLabel + ':';
+  }
+  if (backBtnEl) {
+    backBtnEl.textContent = I18N.getString('game_over_back_button', lang.code) || backBtnEl.textContent;
+    backBtnEl.setAttribute('aria-label', backBtnEl.textContent);
+    backBtnEl.title = backBtnEl.textContent;
+  }
+  // Localize settings screen elements if present
+  const labelEasy = document.getElementById('label-easy');
+  if (labelEasy) {
+    const v = I18N.getString('settings_easy', lang.code);
+    if (v) labelEasy.textContent = v;
+  }
+  const labelNormal = document.getElementById('label-normal');
+  if (labelNormal) {
+    const v = I18N.getString('settings_normal', lang.code);
+    if (v) labelNormal.textContent = v;
+  }
+  const settingsOkBtn = document.getElementById('settings-back-btn');
+  if (settingsOkBtn) {
+    const v = I18N.getString('settings_ok', lang.code);
+    if (v) settingsOkBtn.textContent = v;
+  }
+  const newWordInputEl = document.getElementById('new-word');
+  if (newWordInputEl) {
+    const v = I18N.getString('settings_word_placeholder', lang.code);
+    if (v) newWordInputEl.setAttribute('placeholder', v);
   }
   if (DEBUG) {
     console.log('[i18n] Applied language', lang.code);
@@ -178,7 +222,13 @@ function renderWordsList() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.textContent = '×';
-    btn.title = 'Remove';
+    // Localize remove title each render
+    try {
+      const langCode = (typeof window !== 'undefined' && window.SS13_lang) ? window.SS13_lang : 'en';
+      const I18n = (typeof window !== 'undefined' && window.SS13_I18N) ? window.SS13_I18N : null;
+      if (I18n) btn.title = I18n.getString('words_remove_button_title', langCode);
+      else btn.title = 'Remove';
+    } catch { btn.title = 'Remove'; }
     btn.style.border = 'none';
     btn.style.outline = 'none';
     btn.style.cursor = 'pointer';
@@ -1265,8 +1315,12 @@ function loop(ts) {
               // Correct letter: collect
               score += 100;
               timeLeft = Math.min(ROUND_TIME_START, timeLeft + 2);
-              addFloater('+100', px + pw + 4, py, '#00ffcc');
-              addFloater('+2s', px + pw + 4, py + 10, '#00ffcc');
+              const langCode = (typeof window !== 'undefined' && window.SS13_lang) ? window.SS13_lang : 'en';
+              const I18n = (typeof window !== 'undefined' && window.SS13_I18N) ? window.SS13_I18N : null;
+              const plus100 = I18n ? I18n.getString('feedback_score_100', langCode) : '+100';
+              const plus2s = I18n ? I18n.getString('feedback_time_plus_2s', langCode) : '+2s';
+              addFloater(plus100, px + pw + 4, py, '#00ffcc');
+              addFloater(plus2s, px + pw + 4, py + 10, '#00ffcc');
               currentIndex += 1;
               letters.splice(i, 1);
               if (currentIndex >= targetWord.length) {
@@ -1322,8 +1376,12 @@ function loop(ts) {
               lives = Math.max(0, lives - 1);
               playerFlashTimer = PLAYER_FLASH_TIME;
               timeLeft = Math.max(0, timeLeft - 2);
-              addFloater('-1 vie', px + pw + 4, py, '#ff6666');
-              addFloater('-2s', px + pw + 4, py + 10, '#ff6666');
+              const langCode2 = (typeof window !== 'undefined' && window.SS13_lang) ? window.SS13_lang : 'en';
+              const I18n2 = (typeof window !== 'undefined' && window.SS13_I18N) ? window.SS13_I18N : null;
+              const minusLife = I18n2 ? I18n2.getString('feedback_life_minus_1', langCode2) : '-1 life';
+              const minus2s = I18n2 ? I18n2.getString('feedback_time_minus_2s', langCode2) : '-2s';
+              addFloater(minusLife, px + pw + 4, py, '#ff6666');
+              addFloater(minus2s, px + pw + 4, py + 10, '#ff6666');
               letters.splice(i, 1);
               if (lives <= 0) {
                 startDeathSequence();
@@ -1339,8 +1397,12 @@ function loop(ts) {
             lives = Math.max(0, lives - 1);
             playerFlashTimer = PLAYER_FLASH_TIME;
             timeLeft = Math.max(0, timeLeft - 2);
-            addFloater('-1 vie', px + pw + 4, py, '#ff6666');
-            addFloater('-2s', px + pw + 4, py + 10, '#ff6666');
+            const langCode3 = (typeof window !== 'undefined' && window.SS13_lang) ? window.SS13_lang : 'en';
+            const I18n3 = (typeof window !== 'undefined' && window.SS13_I18N) ? window.SS13_I18N : null;
+            const minusLife2 = I18n3 ? I18n3.getString('feedback_life_minus_1', langCode3) : '-1 life';
+            const minus2sB = I18n3 ? I18n3.getString('feedback_time_minus_2s', langCode3) : '-2s';
+            addFloater(minusLife2, px + pw + 4, py, '#ff6666');
+            addFloater(minus2sB, px + pw + 4, py + 10, '#ff6666');
             obstacles.splice(i, 1);
             if (lives <= 0) {
               startDeathSequence();
@@ -1604,7 +1666,10 @@ function loop(ts) {
     ctx.fillRect(0,0,canvas.width,18);
     ctx.fillStyle = '#ffffff';
     ctx.font = '11px monospace';
-    ctx.fillText('TUTORIEL', canvas.width/2, 9);
+  // Tutorial title
+  const _langCode = (typeof window !== 'undefined' && window.SS13_lang) ? window.SS13_lang : (I18N.LANGS[0]?.code || 'en');
+  const t = (k) => I18N.getString(k, _langCode);
+  ctx.fillText(t('tutorial_title'), canvas.width/2, 9);
     // Highlight zones
     if (howToPhase === 1) {
       ctx.fillStyle = 'rgba(255,255,255,0.50)';
@@ -1613,7 +1678,7 @@ function loop(ts) {
       ctx.font = 'bold 18px monospace';
       ctx.fillText('⬆️', canvas.width/2, canvas.height/4);
       ctx.font = '11px monospace';
-      ctx.fillText('Monte', canvas.width/2, canvas.height/4 + 16);
+  ctx.fillText(t('tutorial_up'), canvas.width/2, canvas.height/4 + 16);
     }
     if (howToPhase === 3) {
       ctx.fillStyle = 'rgba(255,255,255,0.50)';
@@ -1622,7 +1687,7 @@ function loop(ts) {
       ctx.font = 'bold 18px monospace';
       ctx.fillText('⬇️', canvas.width/2, canvas.height*0.75);
       ctx.font = '11px monospace';
-      ctx.fillText('Descend', canvas.width/2, canvas.height*0.75 + 16);
+  ctx.fillText(t('tutorial_down'), canvas.width/2, canvas.height*0.75 + 16);
     }
     // Letters collection instruction (phase 5)
     if (howToPhase === 5) {
@@ -1630,8 +1695,9 @@ function loop(ts) {
       ctx.fillRect(0, canvas.height - 30, canvas.width, 30);
       ctx.fillStyle = '#ffffff';
       ctx.font = '11px monospace';
-      ctx.fillText('Ramasse les lettres dans l\'ordre', canvas.width/2, canvas.height - 22);
-      ctx.fillText(`MOT: ${howToWord.split('').map((c,i)=> i < howToCollectedIndex ? c : '_').join(' ')}`, canvas.width/2, canvas.height - 10);
+  ctx.fillText(t('tutorial_collect_letters'), canvas.width/2, canvas.height - 22);
+  const wordLabel = t('tutorial_word_label');
+  ctx.fillText(`${wordLabel}: ${howToWord.split('').map((c,i)=> i < howToCollectedIndex ? c : '_').join(' ')}`, canvas.width/2, canvas.height - 10);
     }
     // Obstacle avoidance instruction (phase 6)
     if (howToPhase === 6) {
@@ -1639,7 +1705,7 @@ function loop(ts) {
       ctx.fillRect(0, canvas.height - 30, canvas.width, 30);
       ctx.fillStyle = '#ffffff';
       ctx.font = '11px monospace';
-      ctx.fillText('Évite les obstacles !', canvas.width/2, canvas.height - 20);
+  ctx.fillText(t('tutorial_avoid_obstacles'), canvas.width/2, canvas.height - 20);
       ctx.fillStyle = 'rgba(255,0,0,0.35)';
       if (howToObstacle) ctx.fillRect(howToObstacle.x - 2, howToObstacle.y - 2, howToObstacle.w + 4, howToObstacle.h + 4);
     }
@@ -1654,7 +1720,7 @@ function loop(ts) {
       ctx.globalAlpha = alpha;
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 12px monospace';
-      ctx.fillText('Appuie sur une touche ou l\'écran pour jouer ▶', canvas.width/2, 28);
+  ctx.fillText(t('tutorial_press_to_play'), canvas.width/2, 28);
       ctx.globalAlpha = 1;
     }
     ctx.restore();
@@ -1972,8 +2038,11 @@ function _setStateWrapper(next) {
       bestScore = score;
       try { localStorage.setItem('ss13_best', String(bestScore)); } catch {}
     }
-    if (overFinal) overFinal.textContent = `Score: ${score}`;
-    if (overBest) overBest.textContent = `Best: ${bestScore}`;
+    const langCode = (typeof window !== 'undefined' && window.SS13_lang) ? window.SS13_lang : (I18N.LANGS[0]?.code || 'en');
+    const scoreLabel = I18N.getString('game_over_score_label', langCode) || 'Score';
+    const bestLabel = I18N.getString('game_over_best_label', langCode) || 'Best';
+    if (overFinal) overFinal.textContent = `${scoreLabel}: ${score}`;
+    if (overBest) overBest.textContent = `${bestLabel}: ${bestScore}`;
     // Publish a webxdc event (if available)
     sendGameOverUpdateOnce();
   }

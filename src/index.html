@@ -47,10 +47,10 @@
         <div class="settings-list" style="display:grid;gap:10px;justify-items:center;margin:12px 0 16px;">
           <div style="display:flex;align-items:center;gap:10px;font:14px monospace;">
             <label style="display:flex;align-items:center;gap:6px;">
-              <input type="radio" name="difficulty" id="diff-easy" value="easy" /> EASY
+              <input type="radio" name="difficulty" id="diff-easy" value="easy" /> <span id="label-easy" data-i18n="settings_easy">EASY</span>
             </label>
             <label style="display:flex;align-items:center;gap:6px;">
-              <input type="radio" name="difficulty" id="diff-normal" value="normal" /> NORMAL
+              <input type="radio" name="difficulty" id="diff-normal" value="normal" /> <span id="label-normal" data-i18n="settings_normal">NORMAL</span>
             </label>
           </div>
           
@@ -58,14 +58,14 @@
           <div style="display:grid;gap:8px;justify-items:center;">
             <div id="words-list" style="display:flex;flex-wrap:wrap;gap:6px;max-width:620px;justify-content:center;"></div>
             <div style="display:flex;gap:8px;align-items:center;justify-content:center;">
-              <input id="new-word" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters" placeholder="A-z • max 12" style="padding:10px 12px;border-radius:8px;border:1px solid #2c3642;background:#0d131a;color:#eaeaea;font:14px monospace;width:200px;" />
+              <input id="new-word" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters" placeholder="A-Z • max 12" data-i18n-placeholder="settings_word_placeholder" style="padding:10px 12px;border-radius:8px;border:1px solid #2c3642;background:#0d131a;color:#eaeaea;font:14px monospace;width:200px;" />
               <button id="add-word-btn" class="pixel-btn">+</button>
               <button id="reset-words-btn" class="pixel-btn">↺</button>
             </div>
           </div>
         </div>
         <div class="actions" style="display:flex;justify-content:center;gap:8px;">
-          <button id="settings-back-btn" class="pixel-btn">OK</button>
+          <button id="settings-back-btn" class="pixel-btn" data-i18n="settings_ok">OK</button>
         </div>
       </section>
 

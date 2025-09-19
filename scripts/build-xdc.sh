@@ -112,6 +112,17 @@ cp "$SRC_DIR/manifest.toml" "$STAGING_DIR/"
 cp "$SRC_DIR/icon.png" "$STAGING_DIR/" 2>/dev/null || true
 cp "$SRC_DIR/credits.html" "$STAGING_DIR/" 2>/dev/null || true
 cp -R "$SRC_DIR/assets" "$STAGING_DIR/assets"
+ # Include i18n registry and credit fragments
+ if [[ -d "$SRC_DIR/i18n" ]]; then
+   mkdir -p "$STAGING_DIR/i18n"
+   # copy root i18n files
+   find "$SRC_DIR/i18n" -maxdepth 1 -type f -name '*.js' -exec cp {} "$STAGING_DIR/i18n/" \;
+   # copy credits fragments directory if exists
+   if [[ -d "$SRC_DIR/i18n/credits" ]]; then
+     mkdir -p "$STAGING_DIR/i18n/credits"
+     cp -R "$SRC_DIR/i18n/credits"/*.html "$STAGING_DIR/i18n/credits/" 2>/dev/null || true
+   fi
+ fi
 
 # Add top-level docs if present
 [[ -f "$ROOT_DIR/README.md" ]] && cp "$ROOT_DIR/README.md" "$STAGING_DIR/"
