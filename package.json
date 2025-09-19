@@ -1,6 +1,6 @@
 {
   "name": "street-sweeper-13",
-  "version": "0.1.0",
+  "version": "13.0.0",
   "private": true,
   "description": "A tiny webxdc game scaffold with a canvas and basic state transitions.",
   "scripts": {

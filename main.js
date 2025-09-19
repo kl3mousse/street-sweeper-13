@@ -7,6 +7,7 @@ const GameState = {
   START: 0,
   RUN: 1,
   OVER: 2,
+  HOW_TO: 3,
 };
  
 let state = GameState.START;
@@ -20,11 +21,13 @@ const startScreen = document.getElementById('start-screen');
 const gameScreen = document.getElementById('game-screen');
 const overScreen = document.getElementById('over-screen');
 const settingsScreen = document.getElementById('settings-screen');
+const howToScreen = document.getElementById('howto-screen');
 const overFinal = document.getElementById('over-final');
 const overBest = document.getElementById('over-best');
 
 const startBtn = document.getElementById('start-btn');
 const settingsBtn = document.getElementById('settings-btn');
+// howToBtn removed (HOW_TO auto after START)
 const backBtn = document.getElementById('back-btn');
 const settingsBackBtn = document.getElementById('settings-back-btn');
 const diffEasy = document.getElementById('diff-easy');
@@ -39,12 +42,16 @@ function setState(next) {
   state = next;
   // Toggle screens
   startScreen.classList.toggle('hidden', state !== GameState.START);
-  gameScreen.classList.toggle('hidden', state !== GameState.RUN);
+  gameScreen.classList.toggle('hidden', !(state === GameState.RUN || state === GameState.HOW_TO));
   overScreen.classList.toggle('hidden', state !== GameState.OVER);
+  if (howToScreen) howToScreen.classList.add('hidden'); // deprecated static screen
   if (settingsScreen) settingsScreen.classList.add('hidden');
+  if (state === GameState.HOW_TO) {
+    startHowTo();
+  }
 }
 
-if (startBtn) startBtn.addEventListener('click', () => setState(GameState.RUN));
+if (startBtn) startBtn.addEventListener('click', () => setState(GameState.HOW_TO));
 if (settingsBtn) settingsBtn.addEventListener('click', () => {
   // Show settings screen; hide others
   startScreen.classList.add('hidden');
@@ -226,6 +233,42 @@ function currentCityAssets() {
   return cityAssets[Math.max(0, Math.min(CITY_DEFS.length - 1, cityIndex))];
 }
 let streetScrollX = 0; // pixels, increasing moves background left
+
+// HOW_TO tutorial sequence control -----------------------------------------
+let howToTimer = 0; // accumulates seconds in HOW_TO
+let howToPhase = 0; // 0 intro drive, 1 highlight up, 2 move up, 3 highlight down, 4 move down, 5 letters demo, 6 obstacle demo
+let howToLetters = []; // scripted demo letters (separate from real letters array)
+let howToObstacle = null; // single demo obstacle
+let howToWord = 'MOT'; // demo target word for display example
+let howToCollectedIndex = 0; // progress in demo word
+let howToPromptUnlocked = false; // show start prompt only after first full loop
+let lastHowToPhase = -1; // track previous phase to detect transitions
+// HOW_TO timing constants (seconds)
+const HOWTO_IDLE_END = 1.5;
+const HOWTO_HIGHLIGHT_UP_END = 2.3;
+const HOWTO_MOVE_UP_END = 3.1;
+const HOWTO_HIGHLIGHT_DOWN_END = 3.9;
+const HOWTO_MOVE_DOWN_END = 4.7;
+const HOWTO_LETTERS_START = HOWTO_MOVE_DOWN_END; // 4.7
+const HOWTO_LETTERS_END = 10.3; // extended letters phase end
+const HOWTO_OBSTACLE_START = HOWTO_LETTERS_END; // 10.3
+const HOWTO_OBSTACLE_END = HOWTO_OBSTACLE_START + 3.0; // 13.3 loop length
+const HOWTO_LOOP_LEN = HOWTO_OBSTACLE_END;
+function startHowTo() {
+  howToTimer = 0;
+  howToPhase = 0;
+  howToLetters = [];
+  howToObstacle = null;
+  howToWord = 'JAZZ';
+  howToCollectedIndex = 0;
+  howToPromptUnlocked = false;
+  lastHowToPhase = -1;
+  // Force Marseille assets for consistent tutorial visuals
+  cityIndex = 0;
+  // ensure player exists and centered lane
+  if (!player) player = new Player();
+  player.reset();
+}
 
 // Lanes and player config
 const LANES = 3;
@@ -818,6 +861,101 @@ function loop(ts) {
     case GameState.START:
       // No game updates in start screen
       break;
+    case GameState.HOW_TO: {
+      if (!player) player = new Player();
+      howToTimer += dt;
+      // Phase timings
+      if (howToTimer > HOWTO_LOOP_LEN) {
+        // End of first loop unlocks persistent prompt
+        howToPromptUnlocked = true;
+        howToTimer -= HOWTO_LOOP_LEN;
+        howToPhase = 0;
+        howToLetters = [];
+        howToObstacle = null;
+        howToCollectedIndex = 0;
+      }
+      const t = howToTimer;
+      let phase = 0;
+      if (t >= HOWTO_IDLE_END) phase = 1;
+      if (t >= HOWTO_HIGHLIGHT_UP_END) phase = 2;
+      if (t >= HOWTO_MOVE_UP_END) phase = 3;
+      if (t >= HOWTO_HIGHLIGHT_DOWN_END) phase = 4;
+      if (t >= HOWTO_LETTERS_START) phase = 5;
+      if (t >= HOWTO_OBSTACLE_START) phase = 6;
+      howToPhase = phase;
+      // Detect phase transition
+      if (howToPhase !== lastHowToPhase) {
+        // When entering letters collection phase (5), ensure player is in middle lane
+        if (howToPhase === 5 && player.lane !== 1 && player.moveDur === 0) {
+          // Move toward middle lane step by step
+          if (player.lane < 1) player.moveDown();
+          else player.moveUp();
+        }
+        lastHowToPhase = howToPhase;
+      }
+      // Movement actions
+      if (phase === 2 && player.lane !== 0 && player.moveDur === 0) {
+        player.moveUp(); // to top
+      }
+      if (phase === 4 && player.lane !== 2 && player.moveDur === 0) {
+        player.moveDown(); // to bottom via middle (two moves) or direct? one move at a time
+      }
+      // Return to middle after obstacle demo end for loop continuity
+      if (phase === 0 && player.lane !== 1 && player.moveDur === 0 && t < 0.3) {
+        if (player.lane < 1) player.moveDown(); else if (player.lane > 1) player.moveUp();
+      }
+      // Letters demo: spawn letters representing howToWord sequentially and auto-collect
+      if (phase === 5) {
+        // spawn letters at intervals across extended phase duration
+        const letterSpawnEvery = 0.6;
+        const localTime = t - HOWTO_LETTERS_START; // 0..extended
+        const neededIndex = Math.floor(localTime / letterSpawnEvery);
+        for (let i = howToLetters.length; i <= neededIndex && i < howToWord.length; i++) {
+          const ch = howToWord[i];
+          const lane = 1; // middle lane for clarity
+          const demo = { char: ch, x: canvas.width + i * 40, y: laneCenterY(lane) - LETTER_SIZE / 2, w: LETTER_SIZE, h: LETTER_SIZE, speed: 60 };
+          howToLetters.push(demo);
+        }
+        // update positions
+        for (const l of howToLetters) l.x -= 60 * dt;
+        // auto-collect when reaching player x
+        if (howToCollectedIndex < howToWord.length) {
+          const l = howToLetters[howToCollectedIndex];
+            if (l && l.x <= PLAYER_X + 10) {
+              howToCollectedIndex++;
+            }
+        }
+      } else {
+        howToLetters = [];
+        howToCollectedIndex = 0;
+      }
+      // Obstacle demo: spawn one obstacle and auto-move to avoid
+  if (phase === 6) {
+        if (!howToObstacle) {
+          // Spawn obstacle in middle lane to demonstrate upward avoidance
+          const lane = 1;
+          howToObstacle = { lane, x: canvas.width + 40, w: OBST_HIT_W, h: OBST_HIT_H, y: (laneCenterY(lane) + OBST_FOOT_OFFSET) - OBST_HIT_H, frame: 4 };
+          // Ensure player starts in middle so avoidance is a clear upward move
+          if (player.lane < 1 && player.moveDur === 0) player.moveDown();
+          if (player.lane > 1 && player.moveDur === 0) player.moveUp();
+        }
+        // Move obstacle
+        if (howToObstacle) howToObstacle.x -= 70 * dt;
+        // When close, move player to safe lane (top)
+        if (howToObstacle && howToObstacle.x < PLAYER_X + 40 && player.lane === 1 && player.moveDur === 0) {
+          player.moveUp(); // move from middle (1) to top (0)
+        }
+        // Despawn after passing
+        if (howToObstacle && howToObstacle.x < -50) howToObstacle = null;
+      } else {
+        howToObstacle = null;
+      }
+      player.update(dt);
+      // Scroll background slowly
+      currentStreetSpeed = 40;
+      streetScrollX = (streetScrollX + currentStreetSpeed * dt) % (currentCityAssets()?.street?.img?.width || 320);
+      break;
+    }
     case GameState.RUN:
       // Handle word-completion pause phases early (freeze gameplay while active)
       if (wordPhase !== 'none') {
@@ -1102,7 +1240,7 @@ function loop(ts) {
   {
     const assets = currentCityAssets();
     const streetObj = assets?.street;
-    if (state === GameState.RUN && streetObj?.loaded) {
+    if ((state === GameState.RUN || state === GameState.HOW_TO) && streetObj?.loaded) {
       const streetImg = streetObj.img;
       const y = canvas.height - streetImg.height; // bottom align
       const w = streetImg.width;
@@ -1123,7 +1261,7 @@ function loop(ts) {
   {
     const assets = currentCityAssets();
     const fgObj = assets?.fg;
-    if (state === GameState.RUN && fgObj?.loaded) {
+    if ((state === GameState.RUN || state === GameState.HOW_TO) && fgObj?.loaded) {
       const fgImg = fgObj.img;
       const bottomAnchor = laneCenterY(0) - 12; // 12px above upper lane
       const w = fgImg.width;
@@ -1254,9 +1392,56 @@ function loop(ts) {
       // ctx.strokeRect(o.x + 0.5, o.y + 0.5, o.w, o.h);
     }
   }
+  // HOW_TO: draw demo letters and obstacle
+  if (state === GameState.HOW_TO) {
+    // Demo letters (simple squares)
+    for (let i = 0; i < howToLetters.length; i++) {
+      const l = howToLetters[i];
+      ctx.fillStyle = i < howToCollectedIndex ? '#00d18f' : '#000000';
+      ctx.fillRect(l.x, l.y, l.w, l.h);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 12px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(l.char, l.x + l.w/2, l.y + l.h/2 + 0.5);
+    }
+    // Demo obstacle (simple red rectangle if active)
+    if (howToObstacle) {
+      const assets = currentCityAssets();
+      const obstacleImg = assets?.obstacles?.img;
+      const loaded = assets?.obstacles?.loaded;
+      if (loaded && obstacleImg) {
+        const frame = Math.min(OBST_SPRITE_COUNT - 1, howToObstacle.frame || 4);
+        const sx = frame * OBST_SPRITE_W;
+        const sy = 0;
+        const sw = OBST_SPRITE_W;
+        const sh = OBST_SPRITE_H;
+        const dw = OBST_SPRITE_W;
+        const dh = OBST_SPRITE_H;
+        // Center sprite relative to hitbox horizontally, bottom align to hitbox bottom
+        const dx = howToObstacle.x + (howToObstacle.w - dw) / 2;
+        const dy = (howToObstacle.y + howToObstacle.h) - dh;
+        const prev = ctx.imageSmoothingEnabled;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(obstacleImg, sx, sy, sw, sh, Math.round(dx), Math.round(dy), dw, dh);
+        ctx.imageSmoothingEnabled = prev;
+      } else {
+        // Fallback rectangle
+        ctx.fillStyle = '#aa2233';
+        ctx.fillRect(howToObstacle.x, howToObstacle.y, howToObstacle.w, howToObstacle.h);
+      }
+    }
+  }
 
   // Draw player
-  if (state === GameState.RUN && player && wordPhase === 'none') {
+  if ((state === GameState.RUN && wordPhase === 'none') || state === GameState.HOW_TO) {
+    if (player && state === GameState.HOW_TO) {
+      // Draw ghost demo player semi-transparent
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      player.draw(ctx);
+      ctx.restore();
+    } else if (player && state === GameState.RUN) {
     if (playerFlashTimer > 0) {
       // draw flashing effect by alternating color overlay
       player.draw(ctx);
@@ -1268,6 +1453,75 @@ function loop(ts) {
     } else {
       player.draw(ctx);
     }
+    }
+  }
+
+  // HOW_TO overlay text on canvas (reinforce controls visually)
+  if (state === GameState.HOW_TO) {
+    // Phase-specific overlays
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '12px monospace';
+    // General translucent top bar for readability
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(0,0,canvas.width,18);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '11px monospace';
+    ctx.fillText('TUTORIEL', canvas.width/2, 9);
+    // Highlight zones
+    if (howToPhase === 1) {
+      ctx.fillStyle = 'rgba(255,255,255,0.50)';
+      ctx.fillRect(0,0,canvas.width,canvas.height/2);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 18px monospace';
+      ctx.fillText('⬆️', canvas.width/2, canvas.height/4);
+      ctx.font = '11px monospace';
+      ctx.fillText('Monte', canvas.width/2, canvas.height/4 + 16);
+    }
+    if (howToPhase === 3) {
+      ctx.fillStyle = 'rgba(255,255,255,0.50)';
+      ctx.fillRect(0,canvas.height/2,canvas.width,canvas.height/2);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 18px monospace';
+      ctx.fillText('⬇️', canvas.width/2, canvas.height*0.75);
+      ctx.font = '11px monospace';
+      ctx.fillText('Descend', canvas.width/2, canvas.height*0.75 + 16);
+    }
+    // Letters collection instruction (phase 5)
+    if (howToPhase === 5) {
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(0, canvas.height - 30, canvas.width, 30);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '11px monospace';
+      ctx.fillText('Ramasse les lettres dans l\'ordre', canvas.width/2, canvas.height - 22);
+      ctx.fillText(`MOT: ${howToWord.split('').map((c,i)=> i < howToCollectedIndex ? c : '_').join(' ')}`, canvas.width/2, canvas.height - 10);
+    }
+    // Obstacle avoidance instruction (phase 6)
+    if (howToPhase === 6) {
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(0, canvas.height - 30, canvas.width, 30);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '11px monospace';
+      ctx.fillText('Évite les obstacles !', canvas.width/2, canvas.height - 20);
+      ctx.fillStyle = 'rgba(255,0,0,0.35)';
+      if (howToObstacle) ctx.fillRect(howToObstacle.x - 2, howToObstacle.y - 2, howToObstacle.w + 4, howToObstacle.h + 4);
+    }
+    // Start prompt fades in after 1s
+    // Show start prompt only after obstacle phase begins OR after first full loop.
+  const nearEnd = howToPhase === 6 && (howToTimer > (HOWTO_LOOP_LEN - 2.5));
+    if (howToPromptUnlocked || nearEnd) {
+      let alpha = 1;
+      if (!howToPromptUnlocked) {
+        alpha = Math.min(1, (howToTimer - (HOWTO_LOOP_LEN - 2.5)) / 1.0);
+      }
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 12px monospace';
+      ctx.fillText('Appuie sur une touche ou l\'écran pour jouer ▶', canvas.width/2, 28);
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
   }
 
   // Debug overlay: draw obstacle bounding boxes and counters
@@ -1424,6 +1678,18 @@ window.setState = setState;
 
 // Input handling
 window.addEventListener('keydown', (e) => {
+  // Open HOW_TO from START with 'i'
+  if (state === GameState.START && (e.key === 'i' || e.key === 'I')) {
+    _setStateWrapper(GameState.HOW_TO);
+    e.preventDefault();
+    return;
+  }
+  // From HOW_TO: Enter or Space starts game
+  if (state === GameState.HOW_TO && (e.key === 'Enter' || e.key === ' ')) {
+    _setStateWrapper(GameState.RUN);
+    e.preventDefault();
+    return;
+  }
   if (state !== GameState.RUN || !player || wordPhase !== 'none') return;
   if (e.key === 'ArrowUp') {
     player.moveUp();
@@ -1436,6 +1702,10 @@ window.addEventListener('keydown', (e) => {
 
 // Mobile / pointer input: tap top/bottom halves of the canvas
 canvas.addEventListener('pointerdown', (e) => {
+  if (state === GameState.HOW_TO) {
+    _setStateWrapper(GameState.RUN);
+    return;
+  }
   if (state !== GameState.RUN || !player || wordPhase !== 'none') return;
   const rect = canvas.getBoundingClientRect();
   const yClient = e.clientY - rect.top;
@@ -1596,7 +1866,7 @@ const _wordsListEl = document.getElementById('words-list');
 const _newWordInput = document.getElementById('new-word');
 const _addWordBtn = document.getElementById('add-word-btn');
 const _resetWordsBtn = document.getElementById('reset-words-btn');
-_startBtn.addEventListener('click', () => _setStateWrapper(GameState.RUN));
+_startBtn.addEventListener('click', () => _setStateWrapper(GameState.HOW_TO));
 if (_settingsBtn) _settingsBtn.addEventListener('click', () => {
   startScreen.classList.add('hidden');
   gameScreen.classList.add('hidden');

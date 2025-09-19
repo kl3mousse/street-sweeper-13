@@ -1,6 +1,6 @@
-# Street Sweeper 13 (webxdc)
+# Street Sweeper 13
 
-An open-source word-collection game where you control a street sweeper to collect letters and spell French words while avoiding obstacles.
+An open-source word-collection game where you control a street sweeper to collect letters and spell French words while avoiding obstacles. This is a webxdc game, able to run as a webapp, or embedded in chat clients that support webxdc.
 
 ## Credits
 
@@ -25,6 +25,7 @@ Road art is taken from Dylan Macgillavry on [Art Station](https://www.artstation
   - H: Toggle collision boxes overlay (debug)
 - **Scoring**: +100 per correct letter, +500 per completed word
 - **Hazards**: Wrong letters and obstacles cost lives and time
+ - **Help Screen Flow**: Press `START` and an instructions screen (arcade style) appears first; from there you launch the actual run. (START → HOW TO → GAME → GAME OVER)
 
 ## Game Features
 - 45-second rounds with time bonuses/penalties
