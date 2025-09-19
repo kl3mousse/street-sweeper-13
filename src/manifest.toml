@@ -1,4 +1,5 @@
 name = "Street Sweeper 13"
+id = "streetsweeper13"
 version = "13.0.0"
 description = "Collect letters to spell words while dodging obstacles in this lane-switching game"
 icon = "icon.png"

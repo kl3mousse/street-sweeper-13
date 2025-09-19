@@ -4,7 +4,11 @@
   "private": true,
   "description": "A tiny webxdc game scaffold with a canvas and basic state transitions.",
   "scripts": {
-    "dev": "webxdc-dev",
-    "pack": "zip -9r street-sweeper-13.xdc index.html styles.css main.js manifest.toml icon.png credits.html assets"
+    "dev": "webxdc-dev run src --no-csp",
+    "pack": "mkdir -p dist && (cd src && zip -9 -r - *) > dist/app.xdc",
+    "dev:xdc": "npm run pack && webxdc-dev run dist/app.xdc"
+  },
+  "devDependencies": {
+    "webxdc-dev": "latest"
   }
 }

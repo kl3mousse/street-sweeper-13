@@ -1,5 +1,4 @@
 // Street Sweeper 13 - minimal game loop and state machine
-
 const DEBUG = false; // set to true to show debug overlays and allow H & L keys in game
 
 /** @enum {number} */
@@ -129,6 +128,7 @@ function renderWordsList() {
       USER_WORDS = current; // set user list; if equals defaults entirely, keep as explicit list
       saveUserWords(USER_WORDS);
       renderWordsList();
+      sendWordsUpdate('remove');
     });
     chip.appendChild(btn);
     container.appendChild(chip);
@@ -151,6 +151,7 @@ function addWordFromInput() {
   saveUserWords(USER_WORDS);
   input.value = '';
   renderWordsList();
+  sendWordsUpdate('add');
 }
 
 if (addWordBtn) addWordBtn.addEventListener('click', addWordFromInput);
@@ -165,6 +166,7 @@ if (resetWordsBtn) resetWordsBtn.addEventListener('click', () => {
   saveUserWords(USER_WORDS);
   // Re-render now shows defaults
   renderWordsList();
+  sendWordsUpdate('reset');
 });
 
 // HUD colors and debug flags
@@ -193,18 +195,17 @@ function sendGameOverUpdateOnce() {
         wordsCompleted,
         city: CITIES[cityIndex]?.name || '',
         timeLeft: Math.round(timeLeft),
-        ts: Date.now()
+        byAddr: wx.selfAddr,
+        byName: wx.selfName,
+        ts: Date.now(),
       };
-      wx.sendUpdate({ payload, info: `Street Sweeper 13: score ${score}` }, `Game over: ${score}`);
-    } else if (DEBUG) {
-      // Fallback visibility in browser/dev
-      console.log('[webxdc] Game over update', {
-        score,
-        best: bestScore,
-        wordsCompleted,
-        city: CITIES[cityIndex]?.name || '',
-        timeLeft: Math.round(timeLeft)
+      wx.sendUpdate({
+        payload,
+        info: `Street Sweeper 13: ${wx.selfName || 'Player'} scored ${score}`,
+        summary: 'Score:' + score,
       });
+    } else if (DEBUG) {
+      console.log('[webxdc] Game over update (no webxdc)', { score, bestScore, wordsCompleted });
     }
   } catch (err) {
     if (DEBUG) console.warn('webxdc sendUpdate failed:', err);
@@ -331,6 +332,72 @@ function getActiveWords() {
   // If user list is empty or invalid, fall back to defaults
   if (!USER_WORDS || USER_WORDS.length === 0) return DEFAULT_WORDS;
   return USER_WORDS;
+}
+// Send webxdc update announcing the active training words list.
+function sendWordsUpdate(reason) {
+  try {
+    const wx = /** @type {any} */ (window).webxdc;
+    if (!wx || typeof wx.sendUpdate !== 'function') return;
+    const active = getActiveWords();
+    const usingDefaults = USER_WORDS.length === 0;
+    const payload = {
+      type: 'words',
+      words: active,
+      userWords: [...USER_WORDS],
+      usingDefaults,
+      reason: reason || '',
+      ts: Date.now(),
+      byAddr: wx.selfAddr,
+      byName: wx.selfName,
+    };
+    wx.sendUpdate({
+      payload,
+      info: `Mots (${active.length}) mis à jour` + (wx.selfName ? ` par ${wx.selfName}` : ''),
+      summary: `Mots:${active.length}`,
+    });
+  } catch (err) {
+    if (DEBUG) console.warn('[webxdc] sendWordsUpdate failed', err);
+  }
+}
+
+// Sanitize a raw incoming list of words (array of strings) using same constraints as local storage logic.
+function sanitizeIncomingWordArray(arr) {
+  if (!Array.isArray(arr)) return [];
+  const cleaned = arr
+    .filter(w => typeof w === 'string')
+    .map(w => (w + '').toUpperCase().trim())
+    .map(w => w.slice(0, 12))
+    .filter(w => w.length >= 1);
+  const seen = new Set();
+  const unique = [];
+  for (const w of cleaned) {
+    if (!seen.has(w)) { seen.add(w); unique.push(w); }
+  }
+  return unique;
+}
+
+// Apply an incoming words update from another participant. Overwrites local custom list only
+// if the local user currently uses defaults OR the incoming update explicitly contains a user list
+// (always true). Since requirement: auto-apply always, we simply replace USER_WORDS with sender's list
+// (or empty to indicate defaults) and persist, then rebuild word queue if active run.
+function applyIncomingWordsUpdate(payload) {
+  try {
+    if (!payload) return;
+    // Distinguish between using defaults vs custom list.
+    if (payload.usingDefaults) {
+      USER_WORDS = []; // use defaults locally
+    } else {
+      const sanitized = sanitizeIncomingWordArray(payload.userWords || payload.words);
+      USER_WORDS = sanitized;
+    }
+    saveUserWords(USER_WORDS);
+    // If settings screen is open, re-render list immediately.
+    try { renderWordsList(); } catch {}
+    // Rebuild queue so new list applies next time or immediately if in RUN and not in a word pause.
+    _rebuildWordQueue();
+  } catch (err) {
+    if (DEBUG) console.warn('[webxdc] applyIncomingWordsUpdate failed', err);
+  }
 }
 // No-repeat word selection: maintain a shuffled queue of valid words (display/playable)
 let WORD_QUEUE = [];
@@ -1898,6 +1965,7 @@ if (_resetWordsBtn) _resetWordsBtn.addEventListener('click', () => {
   USER_WORDS = [];
   saveUserWords(USER_WORDS);
   renderWordsList();
+  sendWordsUpdate('reset');
 });
 
 // Global debug hotkey: toggle collision boxes with 'H'
@@ -1909,3 +1977,106 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
   }
 });
+
+// Optional: listen for other players' updates (multi-player score awareness)
+(function initWebxdcListener(){
+  try {
+    const wx = /** @type {any} */ (window).webxdc;
+    if (!wx || typeof wx.setUpdateListener !== 'function') return;
+    // Maintain an in-memory scoreboard of the latest score per address
+    const scores = {};
+    wx.setUpdateListener((update) => {
+      if (!update || !update.payload) return;
+      const p = update.payload;
+      // Auto-apply incoming word list updates (ignore our own)
+      if (p.type === 'words') {
+        try {
+          const wxSelf = wx.selfAddr;
+          if (!wxSelf || p.byAddr !== wxSelf) {
+            applyIncomingWordsUpdate(p);
+          }
+        } catch (err) {
+          if (DEBUG) console.warn('[webxdc] failed to auto-apply words update', err);
+        }
+      }
+      if (typeof p.score !== 'number') return;
+      const key = p.byAddr || ('addr:' + (p.byName || 'anon'));
+      scores[key] = {
+        name: p.byName || key.slice(5),
+        score: p.score,
+        best: p.best,
+        wordsCompleted: p.wordsCompleted,
+        city: p.city,
+        timeLeft: p.timeLeft,
+        ts: p.ts || Date.now()
+      };
+      if (DEBUG) {
+        // Log a compact leaderboard sorted by score desc
+        const list = Object.values(scores).sort((a,b)=>b.score-a.score).slice(0,5);
+        console.log('[webxdc] top scores', list.map(s=>`${s.name}:${s.score}`).join(', '));
+      }
+      // (Future) Could render a mini leaderboard overlay here.
+    }, 0);
+  } catch (err) {
+    if (DEBUG) console.warn('[webxdc] listener init failed', err);
+  }
+})();
+
+// DEBUG helper: manual sendUpdate button (appears only if DEBUG is true at load time)
+if (DEBUG) {
+  (function addDebugSendButton(){
+    try {
+      if (document.getElementById('debug-sendupdate-btn')) return; // avoid duplicates
+      const btn = document.createElement('button');
+      btn.id = 'debug-sendupdate-btn';
+      btn.textContent = 'Send webxdc update';
+      btn.style.position = 'fixed';
+      btn.style.bottom = '8px';
+      btn.style.right = '8px';
+      btn.style.zIndex = '9999';
+      btn.style.font = '12px monospace';
+      btn.style.padding = '6px 10px';
+      btn.style.background = '#223344';
+      btn.style.color = '#eaeaea';
+      btn.style.border = '1px solid #445566';
+      btn.style.borderRadius = '6px';
+      btn.style.cursor = 'pointer';
+      btn.title = 'Manually emit a webxdc update with current score';
+      btn.addEventListener('click', () => {
+        sendManualDebugUpdate();
+      });
+      document.body.appendChild(btn);
+    } catch (err) {
+      console.warn('[debug] Failed to add debug send button', err);
+    }
+  })();
+}
+
+function sendManualDebugUpdate() {
+  try {
+    const wx = /** @type {any} */ (window).webxdc;
+    if (wx && typeof wx.sendUpdate === 'function') {
+      const payload = {
+        score,
+        best: bestScore,
+        wordsCompleted,
+        city: CITIES[cityIndex]?.name || '',
+        timeLeft: Math.round(timeLeft),
+        byAddr: wx.selfAddr,
+        byName: wx.selfName,
+        ts: Date.now(),
+        manual: true,
+      };
+      wx.sendUpdate({
+        payload,
+        info: `Manual debug update: ${(wx.selfName||'Player')} score ${score}`,
+        summary: 'Manual:' + score,
+      });
+      if (DEBUG) console.log('[debug] Manual webxdc update sent', payload);
+    } else {
+      if (DEBUG) console.log('[debug] webxdc not available; simulated manual update', { score });
+    }
+  } catch (err) {
+    if (DEBUG) console.warn('[debug] manual sendUpdate failed', err);
+  }
+}
