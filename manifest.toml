@@ -1,4 +1,4 @@
 name = "Street Sweeper 13"
-version = "0.1.0"
-description = "A tiny webxdc game scaffold with a canvas and basic state transitions."
+version = "13.0.0"
+description = "Collect letters to spell words while dodging obstacles in this lane-switching game"
 icon = "icon.png"
