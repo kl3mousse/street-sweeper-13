@@ -26,15 +26,13 @@ jobs:
 
       - name: Build static site and package .xdc
         run: |
-          mkdir -p dist
-          # Copy game source files (moved under src/)
-          cp src/index.html src/styles.css src/main.js src/manifest.toml src/icon.png src/credits.html dist/
-          cp -R src/assets dist/assets
-          # Include top-level docs
-          cp LICENSE README.md dist/ || true
-          cd dist
-          # Create .xdc package (webxdc is just a zip archive)
-          zip -9r street-sweeper-13.xdc index.html styles.css main.js manifest.toml icon.png credits.html LICENSE README.md assets
+          chmod +x scripts/build-xdc.sh
+          # Use package.json version for deterministic filename
+          npm run build:xdc:version
+          # Also extract unzipped site for Pages hosting (contents of src)
+          rsync -a src/ dist/site/ --exclude assets --exclude manifest.toml || true
+          # Keep assets and docs already in dist from build script
+          ls -1 dist
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

@@ -5,8 +5,11 @@
   "description": "A tiny webxdc game scaffold with a canvas and basic state transitions.",
   "scripts": {
     "dev": "webxdc-dev run src --no-csp",
-    "pack": "mkdir -p dist && (cd src && zip -9 -r - *) > dist/app.xdc",
-    "dev:xdc": "npm run pack && webxdc-dev run dist/app.xdc"
+    "pack": "mkdir -p dist && (cd src && zip -9 -r - *) > dist/app.xdc", 
+    "build:xdc": "bash scripts/build-xdc.sh",
+    "build:xdc:version": "bash scripts/build-xdc.sh --version $npm_package_version",
+    "run:xdc": "npm run build:xdc && webxdc-dev run dist/kl3mousse-streetsweeper13-v$npm_package_version.xdc",
+    "dev:xdc": "npm run run:xdc" 
   },
   "devDependencies": {
     "webxdc-dev": "latest"
