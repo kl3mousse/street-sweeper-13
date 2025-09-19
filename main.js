@@ -218,8 +218,8 @@ const CITY_DEFS = [
 ];
 const cityAssets = CITY_DEFS.map(c => ({
   fg: initImage(`assets/${c.key}.png`),
-  // Marseille uses existing 'street.png' in repo; others follow '<key>-street.png'
-  street: initImage(c.key === 'marseille' ? `assets/street.png` : `assets/${c.key}-street.png`),
+  // cities follow '<key>-street.png'
+  street: initImage(`assets/${c.key}-street.png`),
   obstacles: initImage(`assets/${c.key}-obstacles.png`),
 }));
 function currentCityAssets() {
