@@ -161,6 +161,20 @@ p { margin: 0 0 16px; color: var(--muted); }
   line-height: 1;
 }
 
+/* Language flag button */
+.pixel-btn.square.lang-btn { overflow: hidden; }
+.flag-sprite {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+  background-image: url('assets/flags.png');
+  background-repeat: no-repeat;
+  background-size: auto; /* use natural size of sprite sheet */
+  display: block;
+  /* Default to French flag (col 6 row 4 as per request) */
+  /* We'll set background-position dynamically via JS */
+}
+
 @media (max-width: 480px) {
   .pixel-btn.square { width: 48px; height: 48px; }
 }

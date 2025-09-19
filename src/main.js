@@ -26,6 +26,8 @@ const overBest = document.getElementById('over-best');
 
 const startBtn = document.getElementById('start-btn');
 const settingsBtn = document.getElementById('settings-btn');
+const langBtn = document.getElementById('lang-btn');
+const langFlagEl = langBtn ? langBtn.querySelector('.flag-sprite') : null;
 // howToBtn removed (HOW_TO auto after START)
 const backBtn = document.getElementById('back-btn');
 const settingsBackBtn = document.getElementById('settings-back-btn');
@@ -66,6 +68,73 @@ if (settingsBtn) settingsBtn.addEventListener('click', () => {
 if (backBtn) backBtn.addEventListener('click', () => setState(GameState.START));
 if (settingsBackBtn) settingsBackBtn.addEventListener('click', () => setState(GameState.START));
 // removed hitbox checkbox UI; H hotkey remains
+
+// ---------------------------------------------------------------------------
+// Simple i18n (start screen only for now) externalized in SS13_I18N
+const LANG_KEY = 'ss13_lang';
+const I18N = (typeof window !== 'undefined' && window.SS13_I18N) ? window.SS13_I18N : { LANGS: [], STRINGS: {}, getString: () => '' };
+let currentLangIndex = 0;
+function detectInitialLang() {
+  try {
+    const saved = localStorage.getItem(LANG_KEY);
+    if (saved) {
+      const idx = I18N.LANGS.findIndex(l => l.code === saved);
+      if (idx !== -1) return idx;
+    }
+  } catch {}
+  const nav = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
+  let idx = I18N.LANGS.findIndex(l => l.code.toLowerCase() === nav);
+  if (idx !== -1) return idx;
+  idx = I18N.LANGS.findIndex(l => nav.startsWith(l.code.toLowerCase()));
+  if (idx !== -1) return idx;
+  return 0;
+}
+function applyLanguage(idx) {
+  if (!I18N.LANGS.length) return;
+  currentLangIndex = (idx + I18N.LANGS.length) % I18N.LANGS.length;
+  const lang = I18N.LANGS[currentLangIndex];
+  try { localStorage.setItem(LANG_KEY, lang.code); } catch {}
+  // Always query current live start button (original may have been replaced by cloning logic later in file)
+  const liveStartBtn = document.getElementById('start-btn');
+  if (liveStartBtn) {
+    const label = I18N.getString('start_button', lang.code) || 'START';
+    liveStartBtn.textContent = label;
+    liveStartBtn.setAttribute('aria-label', label);
+    liveStartBtn.title = label;
+  }
+  document.documentElement.setAttribute('lang', lang.code);
+  if (langFlagEl) {
+    const TILE_SIZE = 32;
+    const x = (lang.tile.c - 1) * -TILE_SIZE;
+    const y = (lang.tile.r - 1) * -TILE_SIZE;
+    langFlagEl.style.backgroundPosition = `${x}px ${y}px`;
+  }
+  if (DEBUG) {
+    console.log('[i18n] Applied language', lang.code);
+  }
+  // Fire a custom event so any future UI components can react
+  document.dispatchEvent(new CustomEvent('ss13:lang-change', { detail: { code: lang.code } }));
+}
+if (langBtn) {
+  langBtn.addEventListener('click', () => applyLanguage(currentLangIndex + 1));
+  applyLanguage(detectInitialLang());
+}
+
+// Expose helper for external/manual language setting
+// window.SS13_setLanguage('en') or 'fr', 'es', etc.
+if (typeof window !== 'undefined') {
+  window.SS13_setLanguage = function(code) {
+    const idx = I18N.LANGS.findIndex(l => l.code === code);
+    if (idx !== -1) applyLanguage(idx);
+  };
+  // Allow other scripts to request a language change via event
+  document.addEventListener('ss13:lang-request', (e) => {
+    const detail = /** @type {CustomEvent} */(e).detail;
+    if (detail && typeof detail.code === 'string') {
+      window.SS13_setLanguage(detail.code);
+    }
+  });
+}
 
 // Difficulty handling
 function applyDifficulty(diff) {
